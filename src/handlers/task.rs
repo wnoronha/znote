@@ -37,6 +37,13 @@ pub fn add(data_dir: &Path, args: &TaskAddArgs) -> Result<()> {
         clean_links.push(l.strip_prefix('#').unwrap_or(&l).to_string());
     }
     task.links = clean_links;
+
+    let content = if args.content == "-" {
+        super::read_stdin()?
+    } else {
+        args.content.clone()
+    };
+    task.description = if content.is_empty() { None } else { Some(content) };
     let id = task.id.clone();
 
     hooks::run(
@@ -215,6 +222,14 @@ pub fn update(data_dir: &Path, args: &UpdateArgs) -> Result<()> {
 
     if let Some(title) = &args.title {
         task.title = title.clone();
+    }
+    if let Some(content_raw) = &args.content {
+        let content = if content_raw == "-" {
+            super::read_stdin()?
+        } else {
+            content_raw.clone()
+        };
+        task.description = if content.is_empty() { None } else { Some(content) };
     }
     if let Some(tags_raw) = &args.tags {
         task.tags = parse_tags(tags_raw);

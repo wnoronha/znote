@@ -171,6 +171,14 @@ pub fn update(data_dir: &Path, args: &UpdateArgs) -> Result<()> {
     if let Some(url) = &args.url {
         bm.url = url.clone();
     }
+    if let Some(content_raw) = &args.content {
+        let content = if content_raw == "-" {
+            super::read_stdin()?
+        } else {
+            content_raw.clone()
+        };
+        bm.description = if content.is_empty() { None } else { Some(content) };
+    }
     if let Some(tags_raw) = &args.tags {
         bm.tags = parse_tags(tags_raw);
     }

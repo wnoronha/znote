@@ -34,3 +34,31 @@ pub fn run_editor(path: &Path) -> Result<()> {
     }
     Ok(())
 }
+
+/// Read the entire content of stdin into a string.
+pub fn read_stdin() -> Result<String> {
+    read_all(&mut std::io::stdin())
+}
+
+/// Helper to read all content from a reader into a String.
+pub fn read_all<R: std::io::Read>(mut reader: R) -> Result<String> {
+    let mut buffer = String::new();
+    reader
+        .read_to_string(&mut buffer)
+        .context("Failed to read all from source")?;
+    Ok(buffer)
+}
+
+#[cfg(test)]
+mod handlers_tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_read_all() {
+        let input = "Hello world\nThis is a test.";
+        let reader = Cursor::new(input);
+        let result = read_all(reader).unwrap();
+        assert_eq!(result, input);
+    }
+}
