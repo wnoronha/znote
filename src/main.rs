@@ -24,6 +24,10 @@ fn expand_data_dir(raw: &str) -> Result<PathBuf> {
     Ok(expanded)
 }
 
+fn print_version() {
+    println!("znote v{}", env!("CARGO_PKG_VERSION"));
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     use tracing_subscriber::{EnvFilter, fmt, prelude::*};
@@ -49,6 +53,9 @@ async fn main() -> Result<()> {
             NoteCommands::Edit { id } => handlers::note::edit(&data_dir, &id)?,
             NoteCommands::Delete { id } => handlers::note::delete(&data_dir, &id)?,
         },
+        Commands::Version => {
+            print_version();
+        }
         Commands::Bookmark { command } => match command {
             BookmarkCommands::Add(args) => handlers::bookmark::add(&data_dir, &args)?,
             BookmarkCommands::List => handlers::bookmark::list(&data_dir)?,

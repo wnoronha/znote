@@ -1,7 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "znote")]
+#[command(name = "znote", version)]
 #[command(about = "A minimal, high-performance CLI tool for managing notes, bookmarks, and tasks", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
@@ -19,6 +19,8 @@ pub enum Commands {
         #[command(subcommand)]
         command: NoteCommands,
     },
+    /// Show version information
+    Version,
     /// Bookmark management
     Bookmark {
         #[command(subcommand)]

@@ -54,6 +54,14 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
 
+  useEffect(() => {
+    api.get("/config").then(res => {
+      if (res.data.version) {
+        document.title = `znote (v${res.data.version})`
+      }
+    }).catch(console.error)
+  }, [])
+
   return (
     <>
       <Layout viewMode={viewMode} setViewMode={setViewMode}>

@@ -54,8 +54,9 @@ pub async fn run(host: &str, port: u16, data_dir: &Path) -> Result<()> {
 
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
     println!(
-        "{} server listening on http://{}",
+        "{} v{} server listening on http://{}",
         "znote".bold().cyan(),
+        env!("CARGO_PKG_VERSION"),
         addr
     );
     println!(
@@ -112,11 +113,13 @@ pub fn test_router(state: AppState) -> Router {
 #[derive(serde::Serialize)]
 struct ConfigResponse {
     starred_tag: String,
+    version: String,
 }
 
 async fn api_get_config() -> impl IntoResponse {
     let starred_tag = env::var("ZNOTE_STARRED").unwrap_or_else(|_| "#starred".to_string());
-    (StatusCode::OK, Json(ConfigResponse { starred_tag })).into_response()
+    let version = env!("CARGO_PKG_VERSION").to_string();
+    (StatusCode::OK, Json(ConfigResponse { starred_tag, version })).into_response()
 }
 
 #[derive(serde::Serialize)]

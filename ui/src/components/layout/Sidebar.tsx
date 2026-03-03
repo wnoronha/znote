@@ -18,6 +18,7 @@ export const Sidebar: React.FC = () => {
     const [tasks, setTasks] = useState<any[]>([])
     const [tags, setTags] = useState<string[]>([])
     const [starredTag, setStarredTag] = useState<string>("#starred")
+    const [version, setVersion] = useState<string>("")
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -36,6 +37,7 @@ export const Sidebar: React.FC = () => {
                 setTasks(t.data)
                 setTags(tg.data)
                 setStarredTag(cfg.data.starred_tag)
+                setVersion(cfg.data.version)
             } catch (err) {
                 console.error("Failed to fetch sidebar data", err)
             } finally {
@@ -128,6 +130,9 @@ export const Sidebar: React.FC = () => {
 
             <div className="p-4 border-t space-y-2">
                 <SidebarItem icon={<Settings size={16} />} label="Settings" />
+                <div className="px-3 py-1 text-[10px] text-muted-foreground font-mono opacity-50">
+                    znote v{version}
+                </div>
             </div>
         </aside>
     )
