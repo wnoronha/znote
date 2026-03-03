@@ -351,10 +351,11 @@ mod tests {
         assert_eq!(bookmarks.len(), 1);
         assert_eq!(bookmarks[0].title, "Rust Lang");
         assert_eq!(bookmarks[0].url, "https://rust-lang.org");
-        assert_eq!(
-            bookmarks[0].tags,
-            vec!["#rust".to_string(), "#lang".to_string()]
-        );
+        let mut expected = vec!["#rust".to_string(), "#lang".to_string()];
+        expected.sort();
+        let mut actual = bookmarks[0].tags.clone();
+        actual.sort();
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -454,10 +455,11 @@ mod tests {
         let tasks = storage::list_tasks(dir.path()).unwrap();
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].title, "My Sprint");
-        assert_eq!(
-            tasks[0].tags,
-            vec!["#work".to_string(), "#sprint".to_string()]
-        );
+        let mut expected = vec!["#work".to_string(), "#sprint".to_string()];
+        expected.sort();
+        let mut actual = tasks[0].tags.clone();
+        actual.sort();
+        assert_eq!(actual, expected);
         assert!(tasks[0].items.is_empty());
     }
 
@@ -616,6 +618,10 @@ mod tests {
         let notes_dir = dir.path().join("notes");
         std::fs::write(notes_dir.join("bad.md"), "---\nbad: frontmatter\n---\nbody").unwrap();
 
+        if crate::storage::is_dolt_backend() {
+            crate::storage::sync(dir.path()).unwrap();
+        }
+
         // Now Invalid
         assert!(validate::frontmatter(dir.path()).is_err());
     }
@@ -632,6 +638,9 @@ mod tests {
         std::fs::write(&path, "---\ntitle: Time\ntags: []\ncreated_at: 2024-02-27T10:30:00Z\nupdated_at: 2024-02-27T10:00:00Z\n---\nbody").unwrap();
 
         // Run validation, should repair the file
+        if crate::storage::is_dolt_backend() {
+            crate::storage::sync(dir.path()).unwrap();
+        }
         assert!(validate::frontmatter(dir.path()).is_ok());
 
         let note = crate::storage::load_note(dir.path(), "time").unwrap();
@@ -650,11 +659,20 @@ mod tests {
         let path = notes_dir.join("link_err.md");
         std::fs::write(&path, "---\ntitle: Link Test\ntags: []\nlinks: [\"badformat\"]\ncreated_at: 2024-02-27T10:30:00Z\nupdated_at: 2024-02-27T10:30:00Z\n---\nbody").unwrap();
 
+        if crate::storage::is_dolt_backend() {
+            crate::storage::sync(dir.path()).unwrap();
+        }
+
         // Run validation, should fail because link format is missing a colon
         assert!(validate::frontmatter(dir.path()).is_err());
 
         // Fix the link and reload
         std::fs::write(&path, "---\ntitle: Link Test\ntags: []\nlinks: [\"rel:valid-id\"]\ncreated_at: 2024-02-27T10:30:00Z\nupdated_at: 2024-02-27T10:30:00Z\n---\nbody").unwrap();
+
+        // Sync into dolt since we manually modified the file
+        if crate::storage::is_dolt_backend() {
+            crate::storage::sync(dir.path()).unwrap();
+        }
 
         // This should now be OK
         assert!(validate::frontmatter(dir.path()).is_ok());

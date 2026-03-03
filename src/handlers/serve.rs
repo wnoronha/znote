@@ -1,3 +1,4 @@
+use tower_http::trace::TraceLayer;
 use anyhow::Result;
 use axum::{
     Json, Router,
@@ -47,6 +48,8 @@ pub async fn run(host: &str, port: u16, data_dir: &Path) -> Result<()> {
         token: Some(token.clone()),
     };
 
+    
+
     let app = create_router(state);
 
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
@@ -94,7 +97,7 @@ fn create_router(state: AppState) -> Router {
         .nest("/api", api_routes)
         .route("/", get(serve_index))
         .route("/{*file}", get(serve_asset))
-        .fallback(serve_index)
+        .fallback(serve_index).layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -135,6 +138,82 @@ async fn api_get_links(
     AxumPath(id): AxumPath<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
+    let mut outgoing = Vec::new();
+    let mut incoming = Vec::new();
+
+    if crate::storage::is_dolt_backend() {
+        let db = crate::storage::dolt::DoltStorage::new(&state.data_dir);
+        
+        // 1. Outgoing LINKS from metadata
+        // Since we store links as JSON or separate table, let's just use the table
+        let sql_out = format!("SELECT l.rel_type, l.target_id, n.title as n_title, b.title as b_title, t.title as t_title 
+                             FROM links l 
+                             LEFT JOIN notes n ON l.target_id = n.id
+                             LEFT JOIN bookmarks b ON l.target_id = b.id
+                             LEFT JOIN tasks t ON l.target_id = t.id
+                             WHERE l.source_id = '{}'", id);
+        
+        if let Ok(res) = db.run_sql(&sql_out) {
+            if let Some(rows) = res.get("rows").and_then(|r| r.as_array()) {
+                for r in rows {
+                    let rel = r["rel_type"].as_str().unwrap_or("rel");
+                    let target_id = r["target_id"].as_str().unwrap_or("");
+                    let title = r["n_title"].as_str()
+                        .or(r["b_title"].as_str())
+                        .or(r["t_title"].as_str())
+                        .unwrap_or(target_id);
+                    
+                    let etype = if r["n_title"].is_string() { "note" }
+                               else if r["b_title"].is_string() { "bookmark" }
+                               else if r["t_title"].is_string() { "task" }
+                               else { "note" };
+
+                    outgoing.push(LinkItem {
+                        id: target_id.to_string(),
+                        title: title.to_string(),
+                        entity_type: etype.to_string(),
+                        rel: rel.to_string(),
+                    });
+                }
+            }
+        }
+
+        // 2. Incoming LINKS
+        let sql_in = format!("SELECT l.source_id, l.rel_type, n.title as n_title, b.title as b_title, t.title as t_title 
+                            FROM links l
+                            LEFT JOIN notes n ON l.source_id = n.id
+                            LEFT JOIN bookmarks b ON l.source_id = b.id
+                            LEFT JOIN tasks t ON l.source_id = t.id
+                            WHERE l.target_id = '{}' OR l.target_id LIKE '{}%'", id, id);
+        
+        if let Ok(res) = db.run_sql(&sql_in) {
+            if let Some(rows) = res.get("rows").and_then(|r| r.as_array()) {
+                for r in rows {
+                    let rel = r["rel_type"].as_str().unwrap_or("rel");
+                    let source_id = r["source_id"].as_str().unwrap_or("");
+                    let title = r["n_title"].as_str()
+                        .or(r["b_title"].as_str())
+                        .or(r["t_title"].as_str())
+                        .unwrap_or(source_id);
+                    
+                    let etype = if r["n_title"].is_string() { "note" }
+                               else if r["b_title"].is_string() { "bookmark" }
+                               else if r["t_title"].is_string() { "task" }
+                               else { "note" };
+
+                    incoming.push(LinkItem {
+                        id: source_id.to_string(),
+                        title: title.to_string(),
+                        entity_type: etype.to_string(),
+                        rel: rel.to_string(),
+                    });
+                }
+            }
+        }
+        return (StatusCode::OK, Json(LinksResponse { outgoing, incoming })).into_response();
+    }
+
+    // Original FS fallback
     let mut outgoing = Vec::new();
     let mut incoming = Vec::new();
 
@@ -326,6 +405,7 @@ async fn serve_asset(AxumPath(path): AxumPath<String>) -> impl IntoResponse {
 
 // --- API Handlers ---
 
+#[tracing::instrument(skip_all)]
 async fn api_list_notes(State(state): State<AppState>) -> impl IntoResponse {
     match storage::list_notes(&state.data_dir) {
         Ok(notes) => {
@@ -366,6 +446,7 @@ async fn api_list_notes(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+#[tracing::instrument(skip_all)]
 async fn api_list_bookmarks(State(state): State<AppState>) -> impl IntoResponse {
     match storage::list_bookmarks(&state.data_dir) {
         Ok(bms) => {
@@ -407,6 +488,7 @@ async fn api_list_bookmarks(State(state): State<AppState>) -> impl IntoResponse 
     }
 }
 
+#[tracing::instrument(skip_all)]
 async fn api_list_tasks(State(state): State<AppState>) -> impl IntoResponse {
     match storage::list_tasks(&state.data_dir) {
         Ok(tasks) => {
@@ -448,7 +530,24 @@ async fn api_list_tasks(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+#[tracing::instrument(skip_all)]
 async fn api_list_tags(State(state): State<AppState>) -> impl IntoResponse {
+    if crate::storage::is_dolt_backend() {
+        let db = crate::storage::dolt::DoltStorage::new(&state.data_dir);
+        let sql = "SELECT DISTINCT tag FROM tags ORDER BY tag";
+        if let Ok(res) = db.run_sql(sql) {
+            let mut tag_list = Vec::new();
+            if let Some(rows) = res.get("rows").and_then(|r: &serde_json::Value| r.as_array()) {
+                for r in rows {
+                    if let Some(t) = r["tag"].as_str() {
+                        tag_list.push(t.to_string());
+                    }
+                }
+                return (StatusCode::OK, Json(tag_list)).into_response();
+            }
+        }
+    }
+
     let mut tags = HashSet::new();
 
     if let Ok(notes) = storage::list_notes(&state.data_dir) {
@@ -481,6 +580,7 @@ async fn api_list_tags(State(state): State<AppState>) -> impl IntoResponse {
     (StatusCode::OK, Json(tag_list)).into_response()
 }
 
+#[tracing::instrument(skip_all)]
 async fn api_get_note(
     AxumPath(id): AxumPath<String>,
     State(state): State<AppState>,
@@ -504,6 +604,7 @@ async fn api_get_note(
     }
 }
 
+#[tracing::instrument(skip_all)]
 async fn api_get_bookmark(
     AxumPath(id): AxumPath<String>,
     State(state): State<AppState>,
@@ -528,6 +629,7 @@ async fn api_get_bookmark(
     }
 }
 
+#[tracing::instrument(skip_all)]
 async fn api_get_task(
     AxumPath(id): AxumPath<String>,
     State(state): State<AppState>,
@@ -557,6 +659,7 @@ struct SearchParams {
     q: String,
 }
 
+#[tracing::instrument(skip_all)]
 async fn api_search(
     axum::extract::Query(params): axum::extract::Query<SearchParams>,
     State(state): State<AppState>,
@@ -596,6 +699,7 @@ fn is_starred(tags: &[String]) -> bool {
     tags.iter().any(|t| t == &starred_tag)
 }
 
+#[tracing::instrument(skip_all)]
 async fn api_query(
     axum::extract::Query(params): axum::extract::Query<QueryParams>,
     State(state): State<AppState>,
@@ -669,10 +773,11 @@ async fn api_query(
     }
 }
 
+#[tracing::instrument(skip_all)]
 async fn api_graph(State(state): State<AppState>) -> impl IntoResponse {
     let mut nodes = Vec::new();
     let mut links = Vec::new();
-    let mut valid_ids = std::collections::HashSet::new();
+    let mut valid_ids = std::collections::BTreeSet::new();
 
     // 1. Load all nodes first to build the valid_ids set
     if let Ok(note_list) = storage::list_notes(&state.data_dir) {
@@ -723,12 +828,18 @@ async fn api_graph(State(state): State<AppState>) -> impl IntoResponse {
                 if let Some(link_str) = link_val.as_str()
                     && let Some((rel, target_prefix)) = link_str.split_once(':')
                 {
-                    // Resolve prefix to full ID
+// Resolve prefix to full ID
                     let mut resolved_target = None;
-                    for id in &valid_ids {
-                        if id.starts_with(target_prefix) {
-                            resolved_target = Some(id.clone());
-                            break;
+                    if valid_ids.contains(target_prefix) {
+                        resolved_target = Some(target_prefix.to_string());
+                    } else {
+                        // Find first ID that starts with target_prefix
+                        use std::ops::Bound;
+                        let mut range = valid_ids.range((Bound::Included(target_prefix.to_string()), Bound::Unbounded));
+                        if let Some(found) = range.next() {
+                            if found.starts_with(target_prefix) {
+                                resolved_target = Some(found.clone());
+                            }
                         }
                     }
 

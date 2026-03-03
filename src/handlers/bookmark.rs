@@ -177,7 +177,11 @@ pub fn update(data_dir: &Path, args: &UpdateArgs) -> Result<()> {
         } else {
             content_raw.clone()
         };
-        bm.description = if content.is_empty() { None } else { Some(content) };
+        bm.description = if content.is_empty() {
+            None
+        } else {
+            Some(content)
+        };
     }
     if let Some(tags_raw) = &args.tags {
         bm.tags = parse_tags(tags_raw);

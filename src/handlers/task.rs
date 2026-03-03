@@ -43,7 +43,11 @@ pub fn add(data_dir: &Path, args: &TaskAddArgs) -> Result<()> {
     } else {
         args.content.clone()
     };
-    task.description = if content.is_empty() { None } else { Some(content) };
+    task.description = if content.is_empty() {
+        None
+    } else {
+        Some(content)
+    };
     let id = task.id.clone();
 
     hooks::run(
@@ -229,7 +233,11 @@ pub fn update(data_dir: &Path, args: &UpdateArgs) -> Result<()> {
         } else {
             content_raw.clone()
         };
-        task.description = if content.is_empty() { None } else { Some(content) };
+        task.description = if content.is_empty() {
+            None
+        } else {
+            Some(content)
+        };
     }
     if let Some(tags_raw) = &args.tags {
         task.tags = parse_tags(tags_raw);

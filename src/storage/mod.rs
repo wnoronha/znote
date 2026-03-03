@@ -10,6 +10,13 @@ use crate::models::task::{Task, TaskItem};
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+pub mod dolt;
+
+pub fn is_dolt_backend() -> bool {
+    std::env::var("ZNOTE_STORAGE_BACKEND")
+        .map(|v| v.to_lowercase() == "dolt")
+        .unwrap_or(false)
+}
 
 /// Return the path for a given entity directory, creating it if absent.
 fn entity_dir(data_dir: &Path, entity: &str) -> Result<PathBuf> {
@@ -176,14 +183,14 @@ pub fn serialize_note(note: &Note) -> Result<String> {
     Ok(format!("---\n{}---\n{}", fm_str, note.content))
 }
 
-pub fn save_note(data_dir: &Path, note: &Note) -> Result<()> {
+pub fn save_note_fs(data_dir: &Path, note: &Note) -> Result<()> {
     let dir = entity_dir(data_dir, "notes")?;
     let path = item_path(&dir, &note.id);
     let content = serialize_note(note)?;
     fs::write(&path, content).with_context(|| format!("Failed to write note: {}", path.display()))
 }
 
-pub fn load_note(data_dir: &Path, id: &str) -> Result<Note> {
+pub fn load_note_fs(data_dir: &Path, id: &str) -> Result<Note> {
     let dir = entity_dir(data_dir, "notes")?;
     let full_id = resolve_id(&dir, id)?;
     let path = item_path(&dir, &full_id);
@@ -235,16 +242,16 @@ pub fn load_note(data_dir: &Path, id: &str) -> Result<Note> {
     })
 }
 
-pub fn delete_note(data_dir: &Path, id: &str) -> Result<()> {
+pub fn delete_note_fs(data_dir: &Path, id: &str) -> Result<()> {
     let dir = entity_dir(data_dir, "notes")?;
     let full_id = resolve_id(&dir, id)?;
     let path = item_path(&dir, &full_id);
     fs::remove_file(&path).with_context(|| format!("Failed to delete note: {}", path.display()))
 }
 
-pub fn list_notes(data_dir: &Path) -> Result<Vec<Note>> {
+pub fn list_notes_fs(data_dir: &Path) -> Result<Vec<Note>> {
     let dir = entity_dir(data_dir, "notes")?;
-    load_all_from_dir(&dir, |id| load_note(data_dir, id))
+    load_all_from_dir(&dir, |id| load_note_fs(data_dir, id))
 }
 
 // ---------------------------------------------------------------------------
@@ -274,7 +281,7 @@ pub fn serialize_bookmark(bookmark: &Bookmark) -> Result<String> {
     })
 }
 
-pub fn save_bookmark(data_dir: &Path, bookmark: &Bookmark) -> Result<()> {
+pub fn save_bookmark_fs(data_dir: &Path, bookmark: &Bookmark) -> Result<()> {
     let dir = entity_dir(data_dir, "bookmarks")?;
     let path = item_path(&dir, &bookmark.id);
     let content = serialize_bookmark(bookmark)?;
@@ -282,7 +289,7 @@ pub fn save_bookmark(data_dir: &Path, bookmark: &Bookmark) -> Result<()> {
         .with_context(|| format!("Failed to write bookmark: {}", path.display()))
 }
 
-pub fn load_bookmark(data_dir: &Path, id: &str) -> Result<Bookmark> {
+pub fn load_bookmark_fs(data_dir: &Path, id: &str) -> Result<Bookmark> {
     let dir = entity_dir(data_dir, "bookmarks")?;
     let full_id = resolve_id(&dir, id)?;
     let path = item_path(&dir, &full_id);
@@ -359,16 +366,16 @@ pub fn load_bookmark(data_dir: &Path, id: &str) -> Result<Bookmark> {
     })
 }
 
-pub fn delete_bookmark(data_dir: &Path, id: &str) -> Result<()> {
+pub fn delete_bookmark_fs(data_dir: &Path, id: &str) -> Result<()> {
     let dir = entity_dir(data_dir, "bookmarks")?;
     let full_id = resolve_id(&dir, id)?;
     let path = item_path(&dir, &full_id);
     fs::remove_file(&path).with_context(|| format!("Failed to delete bookmark: {}", path.display()))
 }
 
-pub fn list_bookmarks(data_dir: &Path) -> Result<Vec<Bookmark>> {
+pub fn list_bookmarks_fs(data_dir: &Path) -> Result<Vec<Bookmark>> {
     let dir = entity_dir(data_dir, "bookmarks")?;
-    load_all_from_dir(&dir, |id| load_bookmark(data_dir, id))
+    load_all_from_dir(&dir, |id| load_bookmark_fs(data_dir, id))
 }
 
 // ---------------------------------------------------------------------------
@@ -471,14 +478,14 @@ pub fn serialize_task(task: &Task) -> Result<String> {
     })
 }
 
-pub fn save_task(data_dir: &Path, task: &Task) -> Result<()> {
+pub fn save_task_fs(data_dir: &Path, task: &Task) -> Result<()> {
     let dir = entity_dir(data_dir, "tasks")?;
     let path = item_path(&dir, &task.id);
     let content = serialize_task(task)?;
     fs::write(&path, content).with_context(|| format!("Failed to write task: {}", path.display()))
 }
 
-pub fn load_task(data_dir: &Path, id: &str) -> Result<Task> {
+pub fn load_task_fs(data_dir: &Path, id: &str) -> Result<Task> {
     let dir = entity_dir(data_dir, "tasks")?;
     let full_id = resolve_id(&dir, id)?;
     let path = item_path(&dir, &full_id);
@@ -532,16 +539,16 @@ pub fn load_task(data_dir: &Path, id: &str) -> Result<Task> {
     })
 }
 
-pub fn delete_task(data_dir: &Path, id: &str) -> Result<()> {
+pub fn delete_task_fs(data_dir: &Path, id: &str) -> Result<()> {
     let dir = entity_dir(data_dir, "tasks")?;
     let full_id = resolve_id(&dir, id)?;
     let path = item_path(&dir, &full_id);
     fs::remove_file(&path).with_context(|| format!("Failed to delete task: {}", path.display()))
 }
 
-pub fn list_tasks(data_dir: &Path) -> Result<Vec<Task>> {
+pub fn list_tasks_fs(data_dir: &Path) -> Result<Vec<Task>> {
     let dir = entity_dir(data_dir, "tasks")?;
-    load_all_from_dir(&dir, |id| load_task(data_dir, id))
+    load_all_from_dir(&dir, |id| load_task_fs(data_dir, id))
 }
 
 // ---------------------------------------------------------------------------
@@ -661,4 +668,139 @@ pub fn get_incoming_links(data_dir: &Path, target_id: &str) -> Vec<String> {
     incoming.sort();
     incoming.dedup();
     incoming
+}
+
+// ---------------------------------------------------------------------------
+// Dolt Wrappers
+// ---------------------------------------------------------------------------
+pub fn save_note(data_dir: &std::path::Path, note: &Note) -> Result<()> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        db.save_note(note)
+    } else {
+        crate::storage::save_note_fs(data_dir, note)
+    }
+}
+pub fn load_note(data_dir: &std::path::Path, id: &str) -> Result<Note> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        let dir = entity_dir(data_dir, "notes")?;
+    let full_id = resolve_id(&dir, id)?;
+    db.load_note(&full_id)
+    } else {
+        crate::storage::load_note_fs(data_dir, id)
+    }
+}
+pub fn delete_note(data_dir: &std::path::Path, id: &str) -> Result<()> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        let dir = entity_dir(data_dir, "notes")?;
+    let full_id = resolve_id(&dir, id)?;
+    db.delete_note(&full_id)
+    } else {
+        crate::storage::delete_note_fs(data_dir, id)
+    }
+}
+pub fn list_notes(data_dir: &std::path::Path) -> Result<Vec<Note>> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        db.list_notes()
+    } else {
+        crate::storage::list_notes_fs(data_dir)
+    }
+}
+
+pub fn save_bookmark(data_dir: &std::path::Path, bookmark: &Bookmark) -> Result<()> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        db.save_bookmark(bookmark)
+    } else {
+        crate::storage::save_bookmark_fs(data_dir, bookmark)
+    }
+}
+pub fn load_bookmark(data_dir: &std::path::Path, id: &str) -> Result<Bookmark> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        let dir = entity_dir(data_dir, "bookmarks")?;
+    let full_id = resolve_id(&dir, id)?;
+    db.load_bookmark(&full_id)
+    } else {
+        crate::storage::load_bookmark_fs(data_dir, id)
+    }
+}
+pub fn delete_bookmark(data_dir: &std::path::Path, id: &str) -> Result<()> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        let dir = entity_dir(data_dir, "bookmarks")?;
+    let full_id = resolve_id(&dir, id)?;
+    db.delete_bookmark(&full_id)
+    } else {
+        crate::storage::delete_bookmark_fs(data_dir, id)
+    }
+}
+pub fn list_bookmarks(data_dir: &std::path::Path) -> Result<Vec<Bookmark>> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        db.list_bookmarks()
+    } else {
+        crate::storage::list_bookmarks_fs(data_dir)
+    }
+}
+
+pub fn save_task(data_dir: &std::path::Path, task: &Task) -> Result<()> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        db.save_task(task)
+    } else {
+        crate::storage::save_task_fs(data_dir, task)
+    }
+}
+pub fn load_task(data_dir: &std::path::Path, id: &str) -> Result<Task> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        let dir = entity_dir(data_dir, "tasks")?;
+    let full_id = resolve_id(&dir, id)?;
+    db.load_task(&full_id)
+    } else {
+        crate::storage::load_task_fs(data_dir, id)
+    }
+}
+pub fn delete_task(data_dir: &std::path::Path, id: &str) -> Result<()> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        let dir = entity_dir(data_dir, "tasks")?;
+    let full_id = resolve_id(&dir, id)?;
+    db.delete_task(&full_id)
+    } else {
+        crate::storage::delete_task_fs(data_dir, id)
+    }
+}
+pub fn list_tasks(data_dir: &std::path::Path) -> Result<Vec<Task>> {
+    if is_dolt_backend() {
+        let db = dolt::DoltStorage::new(data_dir);
+        // db.init_db();
+        db.list_tasks()
+    } else {
+        crate::storage::list_tasks_fs(data_dir)
+    }
+}
+
+pub fn sync(data_dir: &std::path::Path) -> Result<()> {
+    if !is_dolt_backend() {
+        anyhow::bail!("Sync is only supported when using the dolt backend (ZNOTE_STORAGE_BACKEND=dolt)");
+    }
+    let db = dolt::DoltStorage::new(data_dir);
+    // db.init_db();
+    db.import_from_fs()
 }
