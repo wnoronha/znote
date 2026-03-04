@@ -61,12 +61,12 @@ export const EntityView: React.FC<EntityViewProps> = ({
     }
 
     return (
-        <article className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <article className="space-y-12">
             <header className="space-y-6">
                 <div className="flex items-center justify-between">
                     <Link
                         to={`/${type}s`}
-                        className="flex items-center gap-2 text-xs font-bold text-muted-foreground tracking-widest uppercase hover:text-primary transition-colors"
+                        className="flex items-center gap-2 text-xs font-bold text-muted-foreground tracking-widest uppercase hover:text-primary"
                     >
                         {type === 'note' && <Calendar size={14} className="text-secondary-foreground" />}
                         {type === 'bookmark' && <Share2 size={14} className="text-secondary-foreground" />}
@@ -78,11 +78,11 @@ export const EntityView: React.FC<EntityViewProps> = ({
                         <button
                             onClick={copyToClipboard}
                             title="Copy URL"
-                            className="flex items-center gap-1.5 text-[10px] font-mono bg-muted/50 px-2 py-1 rounded border hover:border-primary transition-all group relative"
+                            className="flex items-center gap-1.5 text-[10px] font-mono bg-muted/50 px-2 py-1 rounded border hover:border-primary group relative"
                         >
-                            <IdCard size={12} className="opacity-50 group-hover:opacity-100" />
-                            <span className="opacity-50 group-hover:opacity-100">{id}</span>
-                            {copied && <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-2 py-1 rounded shadow-xl animate-in zoom-in-50 fade-in duration-200 whitespace-nowrap">URL Copied!</span>}
+                            <IdCard size={12} className="opacity-50" />
+                            <span className="opacity-50">{id}</span>
+                            {copied && <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-2 py-1 rounded shadow-xl whitespace-nowrap">URL Copied!</span>}
                         </button>
                     </div>
                 </div>
@@ -110,10 +110,10 @@ export const EntityView: React.FC<EntityViewProps> = ({
                 <section className={viewMode === 'raw' ? "" : "prose prose-slate dark:prose-invert"}>
                     {viewMode === 'raw' ? (
                         <div className="relative group">
-                            <div className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="absolute right-4 top-4">
                                 <button
                                     onClick={() => navigator.clipboard.writeText(content)}
-                                    className="px-3 py-1.5 bg-muted/80 backdrop-blur-sm border rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-primary hover:text-primary-foreground transition-all"
+                                    className="px-3 py-1.5 bg-muted/80 backdrop-blur-sm border rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-primary hover:text-primary-foreground"
                                 >
                                     Copy Raw
                                 </button>
@@ -132,13 +132,27 @@ export const EntityView: React.FC<EntityViewProps> = ({
                                         <p {...props}>
                                             {React.Children.map(children, (child) => {
                                                 if (typeof child === 'string') {
-                                                    // This handles ![[id]] on its own line OR in the middle of text
-                                                    // but to look like Obsidian cards, we mainly focus on it being standalone-ish
-                                                    const parts = child.split(/(!\[\[[^\]]+\]\])/g)
+                                                    // This handles ![[id]] and [[id|label]]
+                                                    const parts = child.split(/(!?\[\[[^\]]+\]\])/g)
                                                     return parts.map((part, i) => {
-                                                        const match = /^!\[\[([^\]]+)\]\]$/.exec(part)
-                                                        if (match) {
-                                                            return <EmbeddedEntity key={i} targetId={match[1]} />
+                                                        const embedMatch = /^!\[\[([^\]]+)\]\]$/.exec(part)
+                                                        if (embedMatch) {
+                                                            return <EmbeddedEntity key={i} targetId={embedMatch[1]} />
+                                                        }
+
+                                                        const wikiMatch = /^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/.exec(part)
+                                                        if (wikiMatch) {
+                                                            const target = wikiMatch[1].trim()
+                                                            const label = wikiMatch[2] ? wikiMatch[2].trim() : target
+                                                            return (
+                                                                <Link
+                                                                    key={i}
+                                                                    to={`/resolve/${target}`}
+                                                                    className="text-primary font-bold hover:underline"
+                                                                >
+                                                                    {label}
+                                                                </Link>
+                                                            )
                                                         }
                                                         return part
                                                     })
@@ -158,7 +172,7 @@ export const EntityView: React.FC<EntityViewProps> = ({
                                                     onClick={() => {
                                                         navigator.clipboard.writeText(String(children));
                                                     }}
-                                                    className="hover:text-primary transition-colors"
+                                                    className="hover:text-primary"
                                                 >
                                                     copy
                                                 </button>
@@ -205,15 +219,15 @@ export const EntityView: React.FC<EntityViewProps> = ({
             )}
 
             {type === 'bookmark' && url && (
-                <section className="mt-8 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-700 delay-150">
+                <section className="mt-8 space-y-4">
                     <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground px-1">Resource</h3>
                     <a
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-4 p-4 rounded-xl border bg-muted/20 group hover:bg-muted/40 hover:border-indigo-500/50 transition-all duration-300"
+                        className="flex items-center gap-4 p-4 rounded-xl border bg-muted/20 group hover:bg-muted/40 hover:border-indigo-500/50"
                     >
-                        <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform">
+                        <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500">
                             <ExternalLink size={20} />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -263,7 +277,7 @@ const ReferenceItem: React.FC<{ link: LinkItem }> = ({ link }) => {
     return (
         <Link
             to={`/${link.type}/${link.id}`}
-            className="group flex flex-col p-4 rounded-xl border bg-muted/20 hover:bg-muted/50 hover:border-accent transition-all space-y-2"
+            className="group flex flex-col p-4 rounded-xl border bg-muted/20 hover:bg-muted/50 hover:border-accent space-y-2"
         >
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -273,7 +287,7 @@ const ReferenceItem: React.FC<{ link: LinkItem }> = ({ link }) => {
                     </span>
                 </div>
             </div>
-            <h4 className="font-bold text-sm group-hover:text-primary transition-colors truncate">
+            <h4 className="font-bold text-sm group-hover:text-primary truncate">
                 {link.title || link.id.slice(0, 8)}
             </h4>
         </Link>

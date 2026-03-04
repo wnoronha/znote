@@ -113,15 +113,7 @@ pub struct Frontmatter {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-impl Frontmatter {
-    pub fn parse_znote(&self) -> Result<(&str, &str, &str)> {
-        let parts: Vec<&str> = self.znote.split('/').collect();
-        if parts.len() != 3 {
-            anyhow::bail!("Invalid znote field format: '{}'", self.znote);
-        }
-        Ok((parts[0], parts[1], parts[2]))
-    }
-}
+
 
 fn vec_to_space_string(v: &[String]) -> String {
     v.join(" ")
@@ -201,10 +193,9 @@ pub fn load_note_fs(data_dir: &Path, id: &str) -> Result<Note> {
 
     // Try new format first
     if let Ok(fm) = serde_yaml::from_str::<Frontmatter>(fm_str) {
-        let (_, _, stored_id) = fm.parse_znote()?;
         let content_str = body.trim_start_matches('\n');
         return Ok(Note {
-            id: stored_id.to_string(),
+            id: full_id, // Use the resolved full_id from the filename
             title: extract_title(&fm.title, content_str),
             content: content_str.to_string(),
             tags: space_string_to_vec(&fm.tags),
@@ -309,7 +300,6 @@ pub fn load_bookmark_fs(data_dir: &Path, id: &str) -> Result<Bookmark> {
 
     // Try new format first
     if let Ok(fm) = serde_yaml::from_str::<Frontmatter>(fm_str) {
-        let (_, _, stored_id) = fm.parse_znote()?;
         let url = fm.url.clone().unwrap_or_default();
         let extracted = extract_title(&fm.title, body.trim_start_matches('\n'));
         let final_title = if extracted == "Untitled" && !url.is_empty() {
@@ -319,7 +309,7 @@ pub fn load_bookmark_fs(data_dir: &Path, id: &str) -> Result<Bookmark> {
         };
 
         return Ok(Bookmark {
-            id: stored_id.to_string(),
+            id: full_id, // Use resolved full_id
             url,
             title: final_title,
             description,
@@ -498,9 +488,8 @@ pub fn load_task_fs(data_dir: &Path, id: &str) -> Result<Task> {
 
     // Try new format first
     if let Ok(fm) = serde_yaml::from_str::<Frontmatter>(fm_str) {
-        let (_, _, stored_id) = fm.parse_znote()?;
         return Ok(Task {
-            id: stored_id.to_string(),
+            id: full_id, // Use resolved full_id
             title: extract_title(&fm.title, body.trim_start_matches('\n')),
             description,
             tags: space_string_to_vec(&fm.tags),
@@ -578,21 +567,21 @@ fn load_all_from_dir<T>(dir: &Path, loader: impl Fn(&str) -> Result<T>) -> Resul
     Ok(items)
 }
 
-pub fn get_entity_type(data_dir: &Path, id: &str) -> Option<&'static str> {
+pub fn get_entity_type(data_dir: &Path, id: &str) -> Option<(&'static str, String)> {
     if let Ok(dir) = entity_dir(data_dir, "notes")
-        && resolve_id(&dir, id).is_ok()
+        && let Ok(full_id) = resolve_id(&dir, id)
     {
-        return Some("note");
+        return Some(("note", full_id));
     }
     if let Ok(dir) = entity_dir(data_dir, "bookmarks")
-        && resolve_id(&dir, id).is_ok()
+        && let Ok(full_id) = resolve_id(&dir, id)
     {
-        return Some("bookmark");
+        return Some(("bookmark", full_id));
     }
     if let Ok(dir) = entity_dir(data_dir, "tasks")
-        && resolve_id(&dir, id).is_ok()
+        && let Ok(full_id) = resolve_id(&dir, id)
     {
-        return Some("task");
+        return Some(("task", full_id));
     }
     None
 }
@@ -602,7 +591,7 @@ pub fn format_links(data_dir: &Path, links: &[String]) -> Vec<String> {
         .iter()
         .map(|link| {
             if let Some((rel, target)) = link.split_once(':') {
-                let entity_type = get_entity_type(data_dir, target).unwrap_or("unknown");
+                let (entity_type, _) = get_entity_type(data_dir, target).unwrap_or(("unknown", target.to_string()));
                 format!("[{}] {}: {}", entity_type, rel, target)
             } else {
                 link.clone()

@@ -18,7 +18,7 @@ export const TimeToggle: React.FC<TimeToggleProps> = ({ createdAt, updatedAt, mi
                     e.preventDefault()
                     setShowCreatedAt(!showCreatedAt)
                 }}
-                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors bg-muted/20 px-2 py-1 rounded-md"
+                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-primary bg-muted/20 px-2 py-1 rounded-md"
             >
                 {showCreatedAt ? <Calendar size={10} /> : <Clock size={10} />}
                 {showCreatedAt ? 'Created' : 'Updated'} {formatDistanceToNow(new Date(showCreatedAt ? createdAt : updatedAt), { addSuffix: true })}
@@ -32,7 +32,7 @@ export const TimeToggle: React.FC<TimeToggleProps> = ({ createdAt, updatedAt, mi
                 e.preventDefault()
                 setShowCreatedAt(!showCreatedAt)
             }}
-            className="flex items-center gap-1.5 px-3 py-1 bg-muted/50 rounded-full border group hover:border-accent hover:text-foreground transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1 bg-muted/50 rounded-full border group hover:border-accent hover:text-foreground cursor-pointer"
         >
             <Clock size={12} className="opacity-50" />
             <span>{showCreatedAt ? 'Created' : 'Updated'} {formatDistanceToNow(new Date(showCreatedAt ? createdAt : updatedAt), { addSuffix: true })}</span>

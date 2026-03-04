@@ -89,6 +89,7 @@ fn create_router(state: AppState) -> Router {
         .route("/note/{id}", get(api_get_note))
         .route("/bookmark/{id}", get(api_get_bookmark))
         .route("/task/{id}", get(api_get_task))
+        .route("/resolve/{id}", get(api_resolve_id))
         .route("/search", get(api_search))
         .route("/query", get(api_query))
         .route("/graph", get(api_graph))
@@ -148,28 +149,31 @@ async fn api_get_links(
         let db = crate::storage::dolt::DoltStorage::new(&state.data_dir);
         
         // 1. Outgoing LINKS from metadata
-        // Since we store links as JSON or separate table, let's just use the table
-        let sql_out = format!("SELECT l.rel_type, l.target_id, n.title as n_title, b.title as b_title, t.title as t_title 
+        let sql_out = format!("SELECT l.rel_type, l.target_id, 
+                                     n.id as n_id, n.title as n_title, 
+                                     b.id as b_id, b.title as b_title, 
+                                     t.id as t_id, t.title as t_title 
                              FROM links l 
-                             LEFT JOIN notes n ON l.target_id = n.id
-                             LEFT JOIN bookmarks b ON l.target_id = b.id
-                             LEFT JOIN tasks t ON l.target_id = t.id
-                             WHERE l.source_id = '{}'", id);
+                             LEFT JOIN notes n ON n.id LIKE CONCAT(l.target_id, '%')
+                             LEFT JOIN bookmarks b ON b.id LIKE CONCAT(l.target_id, '%')
+                             LEFT JOIN tasks t ON t.id LIKE CONCAT(l.target_id, '%')
+                             WHERE l.source_id = '{}' OR l.source_id LIKE '{}%'", id, id);
         
         if let Ok(res) = db.run_sql(&sql_out) {
             if let Some(rows) = res.get("rows").and_then(|r| r.as_array()) {
                 for r in rows {
                     let rel = r["rel_type"].as_str().unwrap_or("rel");
-                    let target_id = r["target_id"].as_str().unwrap_or("");
-                    let title = r["n_title"].as_str()
-                        .or(r["b_title"].as_str())
-                        .or(r["t_title"].as_str())
-                        .unwrap_or(target_id);
                     
-                    let etype = if r["n_title"].is_string() { "note" }
-                               else if r["b_title"].is_string() { "bookmark" }
-                               else if r["t_title"].is_string() { "task" }
-                               else { "note" };
+                    let (target_id, title, etype) = if let Some(nid) = r["n_id"].as_str() {
+                        (nid, r["n_title"].as_str().unwrap_or(nid), "note")
+                    } else if let Some(bid) = r["b_id"].as_str() {
+                        (bid, r["b_title"].as_str().unwrap_or(bid), "bookmark")
+                    } else if let Some(tid) = r["t_id"].as_str() {
+                        (tid, r["t_title"].as_str().unwrap_or(tid), "task")
+                    } else {
+                        let tid = r["target_id"].as_str().unwrap_or("");
+                        (tid, tid, "note")
+                    };
 
                     outgoing.push(LinkItem {
                         id: target_id.to_string(),
@@ -182,27 +186,31 @@ async fn api_get_links(
         }
 
         // 2. Incoming LINKS
-        let sql_in = format!("SELECT l.source_id, l.rel_type, n.title as n_title, b.title as b_title, t.title as t_title 
+        let sql_in = format!("SELECT l.source_id, l.rel_type, 
+                                    n.id as n_id, n.title as n_title, 
+                                    b.id as b_id, b.title as b_title, 
+                                    t.id as t_id, t.title as t_title 
                             FROM links l
-                            LEFT JOIN notes n ON l.source_id = n.id
-                            LEFT JOIN bookmarks b ON l.source_id = b.id
-                            LEFT JOIN tasks t ON l.source_id = t.id
+                            LEFT JOIN notes n ON n.id LIKE CONCAT(l.source_id, '%')
+                            LEFT JOIN bookmarks b ON b.id LIKE CONCAT(l.source_id, '%')
+                            LEFT JOIN tasks t ON t.id LIKE CONCAT(l.source_id, '%')
                             WHERE l.target_id = '{}' OR l.target_id LIKE '{}%'", id, id);
         
         if let Ok(res) = db.run_sql(&sql_in) {
             if let Some(rows) = res.get("rows").and_then(|r| r.as_array()) {
                 for r in rows {
                     let rel = r["rel_type"].as_str().unwrap_or("rel");
-                    let source_id = r["source_id"].as_str().unwrap_or("");
-                    let title = r["n_title"].as_str()
-                        .or(r["b_title"].as_str())
-                        .or(r["t_title"].as_str())
-                        .unwrap_or(source_id);
                     
-                    let etype = if r["n_title"].is_string() { "note" }
-                               else if r["b_title"].is_string() { "bookmark" }
-                               else if r["t_title"].is_string() { "task" }
-                               else { "note" };
+                    let (source_id, title, etype) = if let Some(nid) = r["n_id"].as_str() {
+                        (nid, r["n_title"].as_str().unwrap_or(nid), "note")
+                    } else if let Some(bid) = r["b_id"].as_str() {
+                        (bid, r["b_title"].as_str().unwrap_or(bid), "bookmark")
+                    } else if let Some(tid) = r["t_id"].as_str() {
+                        (tid, r["t_title"].as_str().unwrap_or(tid), "task")
+                    } else {
+                        let sid = r["source_id"].as_str().unwrap_or("");
+                        (sid, sid, "note")
+                    };
 
                     incoming.push(LinkItem {
                         id: source_id.to_string(),
@@ -604,6 +612,17 @@ async fn api_get_note(
             (StatusCode::OK, Json(n_json)).into_response()
         }
         Err(e) => (StatusCode::NOT_FOUND, e.to_string()).into_response(),
+    }
+}
+
+#[tracing::instrument(skip_all)]
+async fn api_resolve_id(
+    AxumPath(id): AxumPath<String>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    match storage::get_entity_type(&state.data_dir, &id) {
+        Some((t, full_id)) => (StatusCode::OK, Json(serde_json::json!({ "type": t, "id": full_id }))).into_response(),
+        None => (StatusCode::NOT_FOUND, "Entity not found").into_response(),
     }
 }
 

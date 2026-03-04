@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
-import { motion } from "framer-motion"
+
 import {
     ChevronRight,
     Search,
     Loader2,
     Star
 } from "lucide-react"
-import api from "@/lib/api"
+import api, { getToken } from "@/lib/api"
 import { TagPill } from "../TagPill"
 import { EntityIcon } from "../EntityIcon"
 import { TimeToggle } from "../TimeToggle"
@@ -20,6 +20,9 @@ interface Entity {
     updated_at: string
     url?: string
     starred?: boolean
+    content?: string
+    description?: string
+    items?: { text: string; completed: boolean }[]
 }
 
 interface EntityListViewProps {
@@ -33,6 +36,10 @@ export const EntityListView: React.FC<EntityListViewProps> = ({ type }) => {
 
     useEffect(() => {
         const fetchData = () => {
+            if (!getToken()) {
+                setLoading(false)
+                return
+            }
             setLoading(true)
             api.get(`/${type}s`)
                 .then(res => {
@@ -61,10 +68,10 @@ export const EntityListView: React.FC<EntityListViewProps> = ({ type }) => {
     )
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center">
                         <EntityIcon type={type} size={20} />
                     </div>
                     <div>
@@ -80,39 +87,77 @@ export const EntityListView: React.FC<EntityListViewProps> = ({ type }) => {
                         placeholder={`Search ${type}s...`}
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full h-10 bg-muted/40 border-transparent border focus:border-primary focus:bg-background rounded-xl pl-10 pr-4 text-sm focus:outline-none transition-all"
+                        className="w-full h-10 bg-muted/40 border-transparent border focus:border-primary focus:bg-background rounded-xl pl-10 pr-4 text-sm focus:outline-none"
                     />
                 </div>
             </div>
 
             {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                    <Loader2 className="w-8 h-8 text-primary" />
                     <p className="text-sm text-muted-foreground italic">Loading your {type}s...</p>
                 </div>
             ) : filtered.length > 0 ? (
                 <div className="grid gap-3">
-                    {filtered.map((entity, idx) => (
-                        <motion.div
-                            key={entity.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: idx * 0.03 }}
-                        >
+                    {filtered.map((entity) => (
+                        <div key={entity.id}>
                             <Link
                                 to={`/${type}/${entity.id}`}
-                                className="group block bg-card border hover:border-accent hover:shadow-md transition-all rounded-2xl p-4"
+                                className="group block bg-card border hover:border-primary/50 hover:shadow-lg rounded-md p-4 relative overflow-hidden"
                             >
                                 <div className="flex items-center justify-between gap-4">
-                                    <div className="flex-1 min-w-0 space-y-1.5">
+                                    <div className="flex-1 min-w-0 space-y-2">
                                         <div className="flex items-center gap-2">
-                                            <h3 className="font-bold text-lg leading-tight truncate group-hover:text-primary transition-colors">
-                                                {entity.title || (type === 'bookmark' ? entity.url : 'Untitled')}
+                                            <h3 className="font-bold text-lg leading-tight truncate group-hover:text-primary">
+                                                {entity.title || (type === 'bookmark' ? (entity.url ? new URL(entity.url).hostname : 'Untitled') : 'Untitled')}
                                             </h3>
                                             {entity.starred && <Star size={14} className="text-amber-500 fill-amber-500" />}
+
+                                            {type === 'bookmark' && entity.url && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-500 font-mono font-bold uppercase tracking-wider border border-sky-500/20">
+                                                    {(() => {
+                                                        try {
+                                                            return new URL(entity.url).hostname.replace('www.', '')
+                                                        } catch {
+                                                            return 'link'
+                                                        }
+                                                    })()}
+                                                </span>
+                                            )}
                                         </div>
 
-                                        <div className="flex flex-wrap items-center gap-2">
+                                        {/* Type-Specific Previews */}
+                                        {type === 'note' && entity.content && (
+                                            <p className="text-sm text-muted-foreground line-clamp-1 italic opacity-70">
+                                                {entity.content.replace(/[#*`]/g, '').slice(0, 120)}...
+                                            </p>
+                                        )}
+
+                                        {type === 'bookmark' && entity.description && (
+                                            <p className="text-sm text-muted-foreground line-clamp-1 border-l-2 border-muted pl-2 py-0.5">
+                                                {entity.description}
+                                            </p>
+                                        )}
+
+                                        {type === 'task' && entity.items && entity.items.length > 0 && (
+                                            <div className="space-y-1.5 pt-1">
+                                                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                    <span>
+                                                        {entity.items.filter(i => i.completed).length === 0 ? 'Pending' :
+                                                            entity.items.filter(i => i.completed).length === entity.items.length ? 'Completed' : 'In Progress'}
+                                                    </span>
+                                                    <span>{entity.items.filter(i => i.completed).length} / {entity.items.length}</span>
+                                                </div>
+                                                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden border border-muted-foreground/5">
+                                                    <div
+                                                        style={{ width: `${(entity.items.filter(i => i.completed).length / entity.items.length) * 100}%` }}
+                                                        className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="flex flex-wrap items-center gap-2 pt-1">
                                             {entity.tags.map(tag => (
                                                 <TagPill key={tag} tag={tag} />
                                             ))}
@@ -120,17 +165,17 @@ export const EntityListView: React.FC<EntityListViewProps> = ({ type }) => {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col items-end gap-2 shrink-0">
+                                    <div className="flex flex-col items-end gap-2 shrink-0 self-start">
                                         <TimeToggle createdAt={entity.created_at} updatedAt={entity.updated_at} minimal />
-                                        <ChevronRight size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
+                                        <ChevronRight size={16} className="text-muted-foreground -translate-x-2 mt-auto" />
                                     </div>
                                 </div>
                             </Link>
-                        </motion.div>
+                        </div>
                     ))}
                 </div>
             ) : (
-                <div className="py-20 text-center border-2 border-dashed rounded-3xl space-y-4">
+                <div className="py-20 text-center border-2 border-dashed rounded-md space-y-4">
                     <div className="text-muted-foreground italic">No {type}s found matching your search.</div>
                     <button
                         onClick={() => setSearch("")}

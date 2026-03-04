@@ -1,21 +1,31 @@
-import React, { useState, useEffect, useRef, useMemo } from "react"
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
-import { Loader2, ZoomIn, ZoomOut, MousePointer2 } from "lucide-react"
+import { Loader2, ZoomIn, ZoomOut, MousePointer2, Search, X, Settings2, Activity, Tag } from "lucide-react"
 import api from "@/lib/api"
 import ForceGraph2D from "react-force-graph-2d"
-import { forceCollide } from "d3-force"
+
 
 const COLORS = {
-    note: "#6366f1",
-    bookmark: "#10b981",
-    task: "#f59e0b",
+    note: "#60a5fa",     // Blue
+    bookmark: "#34d399", // Green
+    task: "#f59e0b",     // Amber
     default: "#94a3b8",
-    label: "#e2e8f0"
+    link: "rgba(148, 163, 184, 0.2)"
 }
 
 export const GraphView: React.FC = () => {
     const [graphData, setGraphData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
+    const [hoverNode, setHoverNode] = useState<any>(null)
+    const [searchQuery, setSearchQuery] = useState("")
+    const [isSearching, setIsSearching] = useState(false)
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+    const [showEdgeLabels, setShowEdgeLabels] = useState(true)
+
+    // Physics Configuration
+    const [repulsion, setRepulsion] = useState(-2400)
+    const [linkDistance, setLinkDistance] = useState(180)
+
     const fgRef = useRef<any>(null)
     const navigate = useNavigate()
 
@@ -40,149 +50,375 @@ export const GraphView: React.FC = () => {
 
     const memoizedData = useMemo(() => {
         if (!graphData) return { nodes: [], links: [] }
-        // Deep clone and ensure ID consistency
         return JSON.parse(JSON.stringify(graphData))
     }, [graphData])
 
+    // Update forces when configuration changes
     useEffect(() => {
         if (fgRef.current && !loading) {
-            // Increase repulsion (default is -30)
-            fgRef.current.d3Force('charge').strength(-1200);
-            // Increase link distance (default is 30)
-            fgRef.current.d3Force('link').distance(400);
-            // Add some center force to keep it from flying away too far
-            fgRef.current.d3Force('center').strength(0.1);
-            // Prevent overlapping
-            fgRef.current.d3Force('collision', forceCollide(80));
-            // Re-heat simulation to apply changes
+            fgRef.current.d3Force('charge').strength(repulsion);
+            fgRef.current.d3Force('link').distance(linkDistance);
             fgRef.current.d3ReheatSimulation();
         }
-    }, [loading]);
+    }, [repulsion, linkDistance, loading]);
+
+    // Track neighbors for highlighting (similar to minne logic)
+    const neighborsData = useMemo(() => {
+        if (!memoizedData) return { neighbors: new Map(), nodeLinks: new Map() }
+        const neighbors = new Map<string, Set<string>>()
+        const nodeLinks = new Map<string, Set<any>>()
+
+        memoizedData.links.forEach((link: any) => {
+            const s = typeof link.source === 'object' ? link.source.id : link.source
+            const t = typeof link.target === 'object' ? link.target.id : link.target
+
+            if (!neighbors.has(s)) neighbors.set(s, new Set())
+            if (!neighbors.has(t)) neighbors.set(t, new Set())
+            neighbors.get(s)!.add(t)
+            neighbors.get(t)!.add(s)
+
+            if (!nodeLinks.has(s)) nodeLinks.set(s, new Set())
+            if (!nodeLinks.has(t)) nodeLinks.set(t, new Set())
+            nodeLinks.get(s)!.add(link)
+            nodeLinks.get(t)!.add(link)
+        })
+        return { neighbors, nodeLinks }
+    }, [memoizedData])
+
+    const handleNodeClick = useCallback((node: any) => {
+        if (!node) return
+        // Pin/Unpin on click like minne
+        if (node.fx === undefined || node.fx === null) {
+            node.fx = node.x
+            node.fy = node.y
+        } else {
+            node.fx = null
+            node.fy = null
+        }
+    }, [])
+
+    const handleNodeRightClick = useCallback((node: any) => {
+        navigate(`/${node.type}/${node.id}`)
+    }, [navigate])
+
+    const handleSearch = useCallback((e: React.FormEvent) => {
+        e.preventDefault()
+        if (!searchQuery || !fgRef.current || !memoizedData) return
+
+        const q = searchQuery.toLowerCase()
+        const found = memoizedData.nodes.find((n: any) =>
+            (n.name || '').toLowerCase().includes(q) ||
+            (n.id || '').toLowerCase().includes(q)
+        )
+
+        if (found) {
+            fgRef.current.centerAt(found.x, found.y, 1000)
+            fgRef.current.zoom(2.5, 1000)
+            setHoverNode(found)
+        }
+    }, [searchQuery, memoizedData])
+
+    const getRadius = (node: any) => {
+        const degree = (neighborsData.neighbors.get(node.id)?.size || 0)
+        return 5 + Math.sqrt(degree) * 2.5 // minne-inspired scaling
+    }
 
     if (loading) {
         return (
-            <div className="w-full h-[calc(100vh-12rem)] flex flex-col items-center justify-center bg-muted/10 border rounded-2xl">
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                <p className="text-xs text-muted-foreground mt-3 font-medium uppercase tracking-widest text-center">
-                    Simulating Physics...
+            <div className="w-full h-[calc(100vh-12.5rem)] flex flex-col items-center justify-center bg-muted/5 border rounded-xl overflow-hidden shadow-inner">
+                <Loader2 className="w-10 h-10 text-primary/40" />
+                <p className="text-[10px] text-muted-foreground/60 mt-4 font-bold uppercase tracking-[0.2em]">
+                    Relational Physics Syncing...
                 </p>
             </div>
         )
     }
 
     return (
-        <div className="w-full h-[calc(100vh-12rem)] relative bg-[#0d0d0f] border border-white/5 rounded-2xl overflow-hidden shadow-2xl group">
+        <div className="w-full h-[calc(100vh-12.5rem)] relative bg-[#09090b] border rounded-xl overflow-hidden shadow-2xl group flex flex-col">
+            {/* Header / Search Overlay */}
+            <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between pointer-events-none z-20">
+                <div className="flex flex-col gap-1 pointer-events-auto">
+                    <h2 className="text-sm font-bold tracking-tight text-white/90 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
+                        Knowledge Map
+                    </h2>
+                    <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] font-mono">
+                        {memoizedData.nodes.length} Nodes • {memoizedData.links.length} Edges
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-2 pointer-events-auto">
+                    {isSearching && (
+                        <form
+                            onSubmit={handleSearch}
+                            className="relative overflow-hidden"
+                        >
+                            <input
+                                type="text"
+                                autoFocus
+                                placeholder="Find node..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full h-10 pl-10 pr-4 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 font-medium shadow-2xl"
+                            />
+                            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                        </form>
+                    )}
+
+                    <button
+                        onClick={() => setIsSearching(!isSearching)}
+                        className={`p-2.5 rounded-xl backdrop-blur-xl border shadow-lg ${isSearching ? 'bg-primary text-primary-foreground border-primary' : 'bg-black/60 text-white/60 border-white/10 hover:text-white'}`}
+                    >
+                        {isSearching ? <X size={18} /> : <Search size={18} />}
+                    </button>
+
+                    <div className="h-5 w-[1px] bg-white/10 mx-1" />
+
+                    <div className="flex bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-1 shadow-lg">
+                        <button onClick={() => fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400)} className="p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5"><ZoomIn size={18} /></button>
+                        <button onClick={() => fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400)} className="p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5"><ZoomOut size={18} /></button>
+                        <button onClick={() => fgRef.current.centerAt(0, 0, 400)} className="p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5"><MousePointer2 size={18} /></button>
+                    </div>
+
+                    <div className="h-5 w-[1px] bg-white/10 mx-1" />
+
+                    <button
+                        onClick={() => setShowEdgeLabels(!showEdgeLabels)}
+                        className={`p-2.5 rounded-xl backdrop-blur-xl border shadow-lg ${showEdgeLabels ? 'bg-primary text-primary-foreground border-primary' : 'bg-black/60 text-white/60 border-white/10 hover:text-white'}`}
+                        title="Toggle Edge Labels"
+                    >
+                        <Tag size={18} />
+                    </button>
+
+                    <div className="h-5 w-[1px] bg-white/10 mx-1" />
+
+                    <button
+                        onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                        className={`p-2.5 rounded-xl backdrop-blur-xl border shadow-lg ${isSettingsOpen ? 'bg-primary text-primary-foreground border-primary' : 'bg-black/60 text-white/60 border-white/10 hover:text-white'}`}
+                    >
+                        <Settings2 size={18} />
+                    </button>
+
+                    {isSettingsOpen && (
+                        <div
+                            className="absolute top-[120%] right-0 w-64 bg-black/80 backdrop-blur-3xl border border-white/10 rounded-2xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-30 flex flex-col gap-6"
+                        >
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-xs font-bold text-white/80 uppercase tracking-widest flex items-center gap-2">
+                                        <Activity size={12} className="text-primary" />
+                                        Physics Engine
+                                    </h3>
+                                    <button onClick={() => setIsSettingsOpen(false)} className="text-white/20 hover:text-white">
+                                        <X size={14} />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-5">
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center text-[10px] font-bold text-white/40 uppercase tracking-tighter">
+                                            <span>Node Repulsion</span>
+                                            <span className="text-primary font-mono">{Math.abs(repulsion)}</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="-8000"
+                                            max="-500"
+                                            step="100"
+                                            value={repulsion}
+                                            onChange={(e) => setRepulsion(Number(e.target.value))}
+                                            className="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-primary"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center text-[10px] font-bold text-white/40 uppercase tracking-tighter">
+                                            <span>Link Distance</span>
+                                            <span className="text-primary font-mono">{linkDistance}px</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="50"
+                                            max="600"
+                                            step="10"
+                                            value={linkDistance}
+                                            onChange={(e) => setLinkDistance(Number(e.target.value))}
+                                            className="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-primary"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-white/5">
+                                <button
+                                    onClick={() => { setRepulsion(-2400); setLinkDistance(180); }}
+                                    className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] font-bold text-white/40 hover:text-white uppercase tracking-widest"
+                                >
+                                    Reset to Default
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             <ForceGraph2D
                 ref={fgRef}
                 graphData={memoizedData}
+                backgroundColor="#09090b"
                 nodeId="id"
                 linkSource="source"
                 linkTarget="target"
-                nodeLabel="name"
-                linkLabel="label"
-                linkDirectionalArrowLength={6}
+
+                // Link Style (Minne-style curved edges)
+                linkCurvature={0.2}
+                linkDirectionalArrowLength={3}
                 linkDirectionalArrowRelPos={1}
-                linkColor={() => "rgba(255, 255, 255, 0.4)"}
-                linkWidth={1.5}
-                onNodeClick={(node: any) => navigate(`/${node.type}/${node.id}`)}
-                nodeCanvasObject={(node: any, ctx, globalScale) => {
-                    const label = node.name || node.id.slice(0, 8);
-                    const tags = node.tags || [];
-                    const tagString = tags.map((t: string) => `#${t}`).join(' ');
-
-                    const fontSize = 14 / globalScale;
-                    const tagFontSize = 10 / globalScale;
-
-                    ctx.font = `bold ${fontSize}px "IBM Plex Sans", sans-serif`;
-                    const nameWidth = ctx.measureText(label).width;
-
-                    ctx.font = `${tagFontSize}px "IBM Plex Mono", monospace`;
-                    const tagsWidth = ctx.measureText(tagString).width;
-
-                    const width = Math.max(nameWidth, tagsWidth) + 20 / globalScale;
-                    const height = (tags.length > 0 ? 45 : 30) / globalScale;
-                    const radius = 8 / globalScale;
-
-                    // Node Background (Rounded Rect)
-                    ctx.beginPath();
-                    ctx.roundRect(node.x - width / 2, node.y - height / 2, width, height, radius);
-
-                    // Fill with entity color (semi-transparent)
-                    const baseColor = COLORS[node.type as keyof typeof COLORS] || COLORS.default;
-                    ctx.fillStyle = `${baseColor}dd`;
-                    ctx.fill();
-
-                    // Border
-                    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
-                    ctx.lineWidth = 1 / globalScale;
-                    ctx.stroke();
-
-                    // Text
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-
-                    // Main Title
-                    ctx.fillStyle = "#000000"; // Black text for high contrast on lightish backgrounds
-                    ctx.font = `bold ${fontSize}px "IBM Plex Sans", sans-serif`;
-                    const titleY = tags.length > 0 ? node.y - 6 / globalScale : node.y;
-                    ctx.fillText(label, node.x, titleY);
-
-                    // Tags
-                    if (tags.length > 0) {
-                        ctx.font = `${tagFontSize}px "IBM Plex Mono", monospace`;
-                        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-                        ctx.fillText(tagString, node.x, node.y + 12 / globalScale);
-                    }
+                linkDirectionalParticles={1}
+                linkDirectionalParticleSpeed={0.005}
+                linkWidth={link => {
+                    if (!hoverNode) return 1
+                    const s = typeof link.source === 'object' ? link.source.id : link.source
+                    const t = typeof link.target === 'object' ? link.target.id : link.target
+                    return (s === hoverNode.id || t === hoverNode.id) ? 2.5 : 0.5
                 }}
+                linkColor={link => {
+                    if (!hoverNode) return COLORS.link
+                    const s = typeof link.source === 'object' ? link.source.id : link.source
+                    const t = typeof link.target === 'object' ? link.target.id : link.target
+                    return (s === hoverNode.id || t === hoverNode.id) ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.05)'
+                }}
+
+                // Edge Labels
                 linkCanvasObjectMode={() => 'after'}
                 linkCanvasObject={(link: any, ctx, globalScale) => {
-                    if (!link.label) return;
-                    const fontSize = 12 / globalScale;
-                    const start = link.source;
-                    const end = link.target;
+                    if (!showEdgeLabels || !link.label) return
 
-                    if (typeof start !== 'object' || typeof end !== 'object') return;
+                    const start = link.source
+                    const end = link.target
+                    if (typeof start !== 'object' || typeof end !== 'object') return
 
-                    const textPos = {
-                        x: start.x + (end.x - start.x) / 2,
-                        y: start.y + (end.y - start.y) / 2
-                    };
+                    // Basic label rendering at midpoint
+                    const fontSize = 10 / globalScale
+                    ctx.font = `${fontSize}px "IBM Plex Mono", monospace`
 
-                    const relAngle = Math.atan2(end.y - start.y, end.x - start.x);
+                    // Highlight based on hover
+                    const isHighlighted = !hoverNode || start.id === hoverNode.id || end.id === hoverNode.id
+                    if (!isHighlighted) return
 
-                    ctx.save();
-                    ctx.translate(textPos.x, textPos.y);
-                    ctx.rotate(relAngle);
+                    const text = link.label
+                    const textWidth = ctx.measureText(text).width
 
-                    ctx.font = `${fontSize}px "IBM Plex Mono"`;
-                    const textWidth = ctx.measureText(link.label).width;
+                    // Multi-link curve offset handling (simplified)
+                    const curvature = link.curvature || 0.2
+                    const middlePos = {
+                        x: start.x + (end.x - start.x) / 2 + (end.y - start.y) * curvature / 4,
+                        y: start.y + (end.y - start.y) / 2 - (end.x - start.x) * curvature / 4
+                    }
 
-                    // Background for labels
-                    ctx.fillStyle = 'rgba(13, 13, 15, 0.9)';
-                    ctx.fillRect(-textWidth / 2 - 4 / globalScale, -fontSize / 2 - 2 / globalScale, textWidth + 8 / globalScale, fontSize + 4 / globalScale);
+                    let relAngle = Math.atan2(end.y - start.y, end.x - start.x)
 
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillText(link.label, 0, 0);
-                    ctx.restore();
+                    // Maintain label vertical orientation (don't let it go upside down)
+                    if (relAngle > Math.PI / 2) relAngle -= Math.PI
+                    if (relAngle < -Math.PI / 2) relAngle += Math.PI
+
+                    ctx.save()
+                    ctx.translate(middlePos.x, middlePos.y)
+                    ctx.rotate(relAngle)
+
+                    // Background with rounded corners
+                    const bgWidth = textWidth + 8 / globalScale
+                    const bgHeight = fontSize + 4 / globalScale
+                    ctx.fillStyle = 'rgba(9, 9, 11, 0.95)'
+                    ctx.beginPath()
+                    ctx.roundRect(-bgWidth / 2, -bgHeight / 2, bgWidth, bgHeight, 4 / globalScale)
+                    ctx.fill()
+
+                    // Subtle Border
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'
+                    ctx.lineWidth = 0.5 / globalScale
+                    ctx.stroke()
+
+                    // Text
+                    ctx.textAlign = 'center'
+                    ctx.textBaseline = 'middle'
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+                    ctx.fillText(text, 0, 0)
+                    ctx.restore()
+                }}
+
+                // Interactive state
+                onNodeHover={node => setHoverNode(node)}
+                onNodeClick={handleNodeClick}
+                onNodeRightClick={handleNodeRightClick}
+
+                // Node Custom Rendering
+                nodeCanvasObject={(node: any, ctx, globalScale) => {
+                    const r = getRadius(node)
+                    const isHighlighted = !hoverNode || node.id === hoverNode.id || neighborsData.neighbors.get(hoverNode.id)?.has(node.id)
+                    const opacity = isHighlighted ? 1 : 0.1
+
+                    // Circle shadow / glow
+                    if (isHighlighted && node === hoverNode) {
+                        ctx.beginPath()
+                        ctx.arc(node.x, node.y, r * 1.4, 0, 2 * Math.PI)
+                        ctx.fillStyle = `${COLORS[node.type as keyof typeof COLORS] || COLORS.default}22`
+                        ctx.fill()
+                    }
+
+                    // Main Circle
+                    ctx.beginPath()
+                    ctx.arc(node.x, node.y, r, 0, 2 * Math.PI)
+                    ctx.fillStyle = `${COLORS[node.type as keyof typeof COLORS] || COLORS.default}${Math.floor(opacity * 255).toString(16).padStart(2, '0')}`
+                    ctx.fill()
+
+                    // Stroke for pinned nodes
+                    if (node.fx !== undefined && node.fx !== null) {
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`
+                        ctx.lineWidth = 2 / globalScale
+                        ctx.stroke()
+                    }
+
+                    // Label (Visible on hover or if important)
+                    const label = node.name || node.id.slice(0, 8)
+                    const fontSize = 12 / globalScale
+                    if (isHighlighted && (globalScale > 1 || node === hoverNode)) {
+                        ctx.font = `${node === hoverNode ? 'bold' : 'normal'} ${fontSize}px "Inter", sans-serif`
+                        ctx.textAlign = 'center'
+                        ctx.textBaseline = 'middle'
+                        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`
+                        ctx.fillText(label, node.x, node.y + r + 10 / globalScale)
+                    }
                 }}
             />
 
-            <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
-                <button onClick={() => fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400)} className="p-2 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white/50 hover:text-white"><ZoomIn size={16} /></button>
-                <button onClick={() => fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400)} className="p-2 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white/50 hover:text-white"><ZoomOut size={16} /></button>
-                <button onClick={() => fgRef.current.centerAt(0, 0, 400)} className="p-2 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white/50 hover:text-white"><MousePointer2 size={16} /></button>
-            </div>
+            {/* Legend / Info Stats */}
+            <div className="absolute bottom-6 left-6 flex flex-col gap-3 z-10 pointer-events-none">
+                <div className="p-4 bg-black/60 backdrop-blur-xl rounded-xl border border-white/5 space-y-3 shadow-2xl pointer-events-auto">
+                    <h3 className="text-[9px] font-bold text-white/30 uppercase tracking-[0.2em]">Graph Directory</h3>
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-[#60a5fa] shadow-[0_0_8px_rgba(96,165,250,0.4)]" />
+                            <span className="text-[11px] font-medium text-white/70">Knowledge Notes</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-[#34d399] shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
+                            <span className="text-[11px] font-medium text-white/70">Web Bookmarks</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-[#f59e0b] shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
+                            <span className="text-[11px] font-medium text-white/70">Actionable Tasks</span>
+                        </div>
+                    </div>
+                </div>
 
-            <div className="absolute bottom-6 left-6 flex gap-6 text-[9px] font-bold text-white/30 uppercase tracking-widest bg-black/60 backdrop-blur-xl px-5 py-2.5 rounded-2xl border border-white/5 shadow-xl items-center pointer-events-none">
-                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" /> Note</div>
-                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" /> Bookmark</div>
-                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" /> Task</div>
-            </div>
-
-            <div className="absolute top-6 left-6 pointer-events-none">
-                <span className="text-[10px] font-bold text-white/20 uppercase tracking-tighter bg-white/5 px-2 py-1 rounded border border-white/10">Explorer Mode: Force-Graph Engine</span>
+                <div className="bg-white/5 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10">
+                    <p className="text-[9px] text-white/40 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                        Right-click to open entity • Drag to pin
+                    </p>
+                </div>
             </div>
         </div>
     )

@@ -16,7 +16,7 @@ export const TagPill: React.FC<TagPillProps> = ({ tag, active, className }) => {
             to={`/tag/${cleanTag}`}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-                "text-xs px-3 py-1 rounded-full border transition-all hover:shadow-sm",
+                "text-xs px-3 py-1 rounded-full border  hover:shadow-sm",
                 active 
                     ? "bg-primary/10 border-primary/20 text-primary font-bold shadow-sm" 
                     : "bg-muted/30 text-muted-foreground hover:border-accent hover:text-foreground",
