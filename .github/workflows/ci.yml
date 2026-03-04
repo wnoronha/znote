@@ -35,7 +35,10 @@ jobs:
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
       - name: Install dolt
-        run: sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash'
+        run: |
+          sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash'
+          dolt config --global --add user.email "you@example.com"
+          dolt config --global --add user.name "Your Name"
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
