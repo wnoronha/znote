@@ -159,29 +159,29 @@ async fn api_get_links(
                              LEFT JOIN tasks t ON t.id LIKE CONCAT(l.target_id, '%')
                              WHERE l.source_id = '{}' OR l.source_id LIKE '{}%'", id, id);
         
-        if let Ok(res) = db.run_sql(&sql_out) {
-            if let Some(rows) = res.get("rows").and_then(|r| r.as_array()) {
-                for r in rows {
-                    let rel = r["rel_type"].as_str().unwrap_or("rel");
-                    
-                    let (target_id, title, etype) = if let Some(nid) = r["n_id"].as_str() {
-                        (nid, r["n_title"].as_str().unwrap_or(nid), "note")
-                    } else if let Some(bid) = r["b_id"].as_str() {
-                        (bid, r["b_title"].as_str().unwrap_or(bid), "bookmark")
-                    } else if let Some(tid) = r["t_id"].as_str() {
-                        (tid, r["t_title"].as_str().unwrap_or(tid), "task")
-                    } else {
-                        let tid = r["target_id"].as_str().unwrap_or("");
-                        (tid, tid, "note")
-                    };
+        if let Some(rows) = db.run_sql(&sql_out).ok().and_then(|res| {
+            res.get("rows").and_then(|r| r.as_array().map(|a| a.to_owned()))
+        }) {
+            for r in rows {
+                let rel = r["rel_type"].as_str().unwrap_or("rel");
+                
+                let (target_id, title, etype) = if let Some(nid) = r["n_id"].as_str() {
+                    (nid, r["n_title"].as_str().unwrap_or(nid), "note")
+                } else if let Some(bid) = r["b_id"].as_str() {
+                    (bid, r["b_title"].as_str().unwrap_or(bid), "bookmark")
+                } else if let Some(tid) = r["t_id"].as_str() {
+                    (tid, r["t_title"].as_str().unwrap_or(tid), "task")
+                } else {
+                    let tid = r["target_id"].as_str().unwrap_or("");
+                    (tid, tid, "note")
+                };
 
-                    outgoing.push(LinkItem {
-                        id: target_id.to_string(),
-                        title: title.to_string(),
-                        entity_type: etype.to_string(),
-                        rel: rel.to_string(),
-                    });
-                }
+                outgoing.push(LinkItem {
+                    id: target_id.to_string(),
+                    title: title.to_string(),
+                    entity_type: etype.to_string(),
+                    rel: rel.to_string(),
+                });
             }
         }
 
@@ -196,29 +196,29 @@ async fn api_get_links(
                             LEFT JOIN tasks t ON t.id LIKE CONCAT(l.source_id, '%')
                             WHERE l.target_id = '{}' OR l.target_id LIKE '{}%'", id, id);
         
-        if let Ok(res) = db.run_sql(&sql_in) {
-            if let Some(rows) = res.get("rows").and_then(|r| r.as_array()) {
-                for r in rows {
-                    let rel = r["rel_type"].as_str().unwrap_or("rel");
-                    
-                    let (source_id, title, etype) = if let Some(nid) = r["n_id"].as_str() {
-                        (nid, r["n_title"].as_str().unwrap_or(nid), "note")
-                    } else if let Some(bid) = r["b_id"].as_str() {
-                        (bid, r["b_title"].as_str().unwrap_or(bid), "bookmark")
-                    } else if let Some(tid) = r["t_id"].as_str() {
-                        (tid, r["t_title"].as_str().unwrap_or(tid), "task")
-                    } else {
-                        let sid = r["source_id"].as_str().unwrap_or("");
-                        (sid, sid, "note")
-                    };
+        if let Some(rows) = db.run_sql(&sql_in).ok().and_then(|res| {
+            res.get("rows").and_then(|r| r.as_array().map(|a| a.to_owned()))
+        }) {
+            for r in rows {
+                let rel = r["rel_type"].as_str().unwrap_or("rel");
+                
+                let (source_id, title, etype) = if let Some(nid) = r["n_id"].as_str() {
+                    (nid, r["n_title"].as_str().unwrap_or(nid), "note")
+                } else if let Some(bid) = r["b_id"].as_str() {
+                    (bid, r["b_title"].as_str().unwrap_or(bid), "bookmark")
+                } else if let Some(tid) = r["t_id"].as_str() {
+                    (tid, r["t_title"].as_str().unwrap_or(tid), "task")
+                } else {
+                    let sid = r["source_id"].as_str().unwrap_or("");
+                    (sid, sid, "note")
+                };
 
-                    incoming.push(LinkItem {
-                        id: source_id.to_string(),
-                        title: title.to_string(),
-                        entity_type: etype.to_string(),
-                        rel: rel.to_string(),
-                    });
-                }
+                incoming.push(LinkItem {
+                    id: source_id.to_string(),
+                    title: title.to_string(),
+                    entity_type: etype.to_string(),
+                    rel: rel.to_string(),
+                });
             }
         }
         return (StatusCode::OK, Json(LinksResponse { outgoing, incoming })).into_response();

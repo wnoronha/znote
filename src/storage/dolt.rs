@@ -12,7 +12,6 @@ use crate::models::note::Note;
 use crate::models::task::{Task, TaskItem};
 
 /// Abstract wrapper over Dolt CLI.
-
 static DOLT_POOL: OnceLock<Pool> = OnceLock::new();
 
 pub struct DoltStorage {
@@ -207,7 +206,6 @@ impl DoltStorage {
 
     /// Initializes a new Dolt repository if one does not exist,
     /// and ensures the schema for notes, bookmarks, and tasks is defined.
-    
     pub fn add_remote(&self, name: &str, url: &str) -> Result<()> {
         self.run_dolt(&["remote", "add", name, url])?;
         Ok(())
