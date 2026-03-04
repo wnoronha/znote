@@ -18,6 +18,11 @@ We follow the Conventional Commits specification. This leads to more readable me
 - `<body>`: (optional) detailed explanation of the change and its motivation.
 - `<footer>`: (optional) references to related issues or breaking changes.
 
+## Important Rules
+
+- **No PII**: Never include absolute filesystem paths (e.g., `/home/username/...`) or personal information in commit messages.
+- **Relative Paths**: Always use paths relative to the project root when referencing files in the commit body.
+
 ## Examples
 
 ```text

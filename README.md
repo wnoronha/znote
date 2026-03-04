@@ -127,3 +127,11 @@ make release  # build release binary + UI assets
 make dev      # auto-reload backend (requires cargo-watch)
 make ui-watch # auto-rebuild UI assets
 ```
+
+## Credits
+
+This project stands on the shoulders of giants:
+
+- [steveyegge/beads](https://github.com/steveyegge/beads) - For the inspiration and conceptual foundation for the agent-centric tooling.
+- [dolthub/dolt](https://github.com/dolthub/dolt) - The SQL database that provides Git-like versioning for our data storage backend.
+- [perstarkse/minne](https://github.com/perstarkse/minne) - The graph visualization aesthetics and physics-inspired navigation that influenced the znote Knowledge Map.

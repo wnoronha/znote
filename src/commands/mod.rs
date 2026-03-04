@@ -1,7 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "znote")]
+#[command(name = "znote", version)]
 #[command(about = "A minimal, high-performance CLI tool for managing notes, bookmarks, and tasks", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
@@ -19,6 +19,8 @@ pub enum Commands {
         #[command(subcommand)]
         command: NoteCommands,
     },
+    /// Show version information
+    Version,
     /// Bookmark management
     Bookmark {
         #[command(subcommand)]
@@ -39,11 +41,18 @@ pub enum Commands {
         #[command(subcommand)]
         command: ConfigCommands,
     },
+    /// Manage distributed dolt storage system
+    Dolt {
+        #[command(subcommand)]
+        command: DoltCommands,
+    },
     /// Data validation
     Validate {
         #[command(subcommand)]
         command: ValidateCommands,
     },
+    /// Sync with file system
+    Sync,
     /// Visualize or export a graph of all connected entities
     Graph(GraphArgs),
     /// Serve the web UI
@@ -372,4 +381,16 @@ pub struct ServeArgs {
     /// Host to bind to
     #[arg(short = 'H', long, default_value = "127.0.0.1")]
     pub host: String,
+}
+
+#[derive(Subcommand)]
+pub enum DoltCommands {
+    /// Sync with file system
+    Sync,
+    /// Add remote database
+    RemoteAdd { name: String, url: String },
+    /// Fetch from remote and merge
+    Pull { remote: String },
+    /// Push to remote
+    Push { remote: String },
 }
