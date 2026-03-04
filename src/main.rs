@@ -24,10 +24,25 @@ fn expand_data_dir(raw: &str) -> Result<PathBuf> {
     Ok(expanded)
 }
 
+fn print_version() {
+    println!("znote v{}", env!("CARGO_PKG_VERSION"));
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+    let filter = EnvFilter::try_from_env("ZNOTE_LOG").or_else(|_| EnvFilter::try_from_env("RUST_LOG")).unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::registry().with(fmt::layer()).with(filter).init();
     let cli = Cli::parse();
     let data_dir = expand_data_dir(&cli.data_dir)?;
+        if crate::storage::is_dolt_backend() {
+        let db = crate::storage::dolt::DoltStorage::new(&data_dir);
+        if let Commands::Serve(_) = &cli.command {
+            let _ = db.start_server();
+        }
+        let _ = db.init_db();
+    }
+
 
     match cli.command {
         Commands::Note { command } => match command {
@@ -38,6 +53,9 @@ async fn main() -> Result<()> {
             NoteCommands::Edit { id } => handlers::note::edit(&data_dir, &id)?,
             NoteCommands::Delete { id } => handlers::note::delete(&data_dir, &id)?,
         },
+        Commands::Version => {
+            print_version();
+        }
         Commands::Bookmark { command } => match command {
             BookmarkCommands::Add(args) => handlers::bookmark::add(&data_dir, &args)?,
             BookmarkCommands::List => handlers::bookmark::list(&data_dir)?,
@@ -79,6 +97,8 @@ async fn main() -> Result<()> {
         Commands::Validate { command } => match command {
             ValidateCommands::Frontmatter => handlers::validate::frontmatter(&data_dir)?,
         },
+        Commands::Sync => { storage::sync(&data_dir)?; println!("Storage synchronized with file system successfully."); }
+        Commands::Dolt { command } => handlers::dolt::run(&data_dir, &command)?,
         Commands::Graph(args) => handlers::graph::run(&data_dir, &args)?,
         Commands::Serve(args) => handlers::serve::run(&args.host, args.port, &data_dir).await?,
         Commands::Completions { shell } => handlers::completions::generate_completions(&shell),

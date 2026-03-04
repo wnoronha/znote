@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { Link, useLocation } from "react-router-dom"
-import { motion } from "framer-motion"
+
 import {
     ChevronRight,
     Loader2,
@@ -54,10 +54,10 @@ export const TagResultsView: React.FC = () => {
     }, [tag])
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                    <div className="w-12 h-12 rounded-md bg-primary/10 flex items-center justify-center text-primary">
                         <Hash size={24} />
                     </div>
                     <div>
@@ -69,7 +69,7 @@ export const TagResultsView: React.FC = () => {
 
             {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                    <Loader2 className="w-8 h-8 text-primary" />
                     <p className="text-sm text-muted-foreground italic">Searching for items tagged with #{tag}...</p>
                 </div>
             ) : error ? (
@@ -80,22 +80,17 @@ export const TagResultsView: React.FC = () => {
                 </div>
             ) : entities.length > 0 ? (
                 <div className="grid gap-3">
-                    {entities.map((entity, idx) => (
-                        <motion.div
-                            key={entity.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: idx * 0.03 }}
-                        >
+                    {entities.map((entity) => (
+                        <div key={entity.id}>
                             <Link
                                 to={`/${entity.type}/${entity.id}`}
-                                className="group block bg-card border hover:border-accent hover:shadow-md transition-all rounded-2xl p-4"
+                                className="group block bg-card border hover:border-accent hover:shadow-md rounded-md p-4"
                             >
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex-1 min-w-0 space-y-1.5">
                                         <div className="flex items-center gap-2">
                                             <EntityIcon type={entity.type} size={14} />
-                                            <h3 className="font-bold text-lg leading-tight truncate group-hover:text-primary transition-colors">
+                                            <h3 className="font-bold text-lg leading-tight truncate group-hover:text-primary">
                                                 {entity.title}
                                             </h3>
                                             {entity.starred && <Star size={14} className="text-amber-500 fill-amber-500" />}
@@ -110,15 +105,15 @@ export const TagResultsView: React.FC = () => {
 
                                     <div className="flex flex-col items-end gap-2 shrink-0">
                                         <TimeToggle createdAt={entity.created_at} updatedAt={entity.updated_at} minimal />
-                                        <ChevronRight size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
+                                        <ChevronRight size={16} className="text-muted-foreground -translate-x-2" />
                                     </div>
                                 </div>
                             </Link>
-                        </motion.div>
+                        </div>
                     ))}
                 </div>
             ) : (
-                <div className="py-20 text-center border-2 border-dashed rounded-3xl space-y-4">
+                <div className="py-20 text-center border-2 border-dashed rounded-md space-y-4">
                     <div className="text-muted-foreground italic">No items found with tag #{tag}</div>
                     <Link to="/" className="text-sm font-bold text-primary hover:underline block">
                         Go back home

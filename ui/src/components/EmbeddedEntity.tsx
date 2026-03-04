@@ -79,8 +79,8 @@ export const EmbeddedEntity: React.FC<EmbeddedEntityProps> = ({ targetId }) => {
 
     if (loading) {
         return (
-            <div className="my-4 p-4 rounded-xl border border-dashed flex items-center justify-center gap-3 text-muted-foreground animate-pulse">
-                <Loader2 size={16} className="animate-spin" />
+            <div className="my-4 p-4 rounded-xl border border-dashed flex items-center justify-center gap-3 text-muted-foreground">
+                <Loader2 size={16}  />
                 <span className="text-xs font-medium uppercase tracking-widest">Loading Embed...</span>
             </div>
         )
@@ -99,14 +99,14 @@ export const EmbeddedEntity: React.FC<EmbeddedEntityProps> = ({ targetId }) => {
     const displayContent = header ? extractSection(rawContent, header) : rawContent
 
     return (
-        <div className="my-6 rounded-2xl border bg-muted/5 hover:bg-muted/10 transition-colors overflow-hidden group">
+        <div className="my-6 rounded-2xl border bg-muted/5 hover:bg-muted/10 overflow-hidden group">
             <div className="flex items-center justify-between px-4 py-2 bg-muted/20 border-b">
                 <Link
                     to={`/${entity.type}/${entity.id}${header ? `#${header}` : ''}`}
                     className="flex items-center gap-2 group/link"
                 >
                     <EntityIcon type={entity.type} size={14} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground group-hover/link:text-primary transition-colors">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground group-hover/link:text-primary">
                         {entity.type}: {entity.title || entity.id.slice(0, 8)} {header && <span className="text-primary/60"># {header}</span>}
                     </span>
                 </Link>
@@ -135,7 +135,7 @@ export const EmbeddedEntity: React.FC<EmbeddedEntityProps> = ({ targetId }) => {
                             <p className="text-sm font-bold text-foreground truncate">{entity.title || entity.url}</p>
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5 truncate">{entity.url}</p>
                         </div>
-                        <a href={entity.url} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all">
+                        <a href={entity.url} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" x2="21" y1="14" y2="3" /></svg>
                         </a>
                     </div>

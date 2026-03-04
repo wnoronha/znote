@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react"
-import { Routes, Route, useParams, useLocation, useSearchParams } from "react-router-dom"
+import { Routes, Route, useParams, useLocation, useSearchParams, useNavigate } from "react-router-dom"
 import { Layout } from "./components/layout/Layout"
 import { EntityView } from "./components/views/EntityView"
 import { EntityListView } from "./components/views/EntityListView"
 import { TagResultsView } from "./components/views/TagResultsView"
 import { GraphView } from "./components/views/GraphView"
-import { motion, AnimatePresence } from "framer-motion"
+
 import { Share2, Lock, Key, Loader2 } from "lucide-react"
-import api, { setToken, getToken } from "./lib/api"
+import api, { setToken, getToken, checkVersionSync } from "./lib/api"
 
 export type ViewMode = "reader" | "raw" | "explorer"
 
@@ -21,19 +21,27 @@ function App() {
   useEffect(() => {
     const token = searchParams.get("token")
     if (token) {
+      console.log("App: Found token in URL")
       setToken(token)
-      setNeedsToken(prev => prev ? false : prev)
+      setNeedsToken(false)
       // Remove token from URL to keep it clean
       searchParams.delete("token")
       setSearchParams(searchParams, { replace: true })
     } else if (!getToken()) {
-      setNeedsToken(prev => prev ? prev : true)
+      console.log("App: No token in localStorage, requiring auth")
+      setNeedsToken(true)
     }
+  }, [searchParams, setSearchParams])
 
-    const handleUnauthorized = () => setNeedsToken(true)
+  // Separate effect for the unauthorized event listener
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      console.log("App: Catched unauthorized event")
+      setNeedsToken(true)
+    }
     window.addEventListener("znote-unauthorized", handleUnauthorized)
     return () => window.removeEventListener("znote-unauthorized", handleUnauthorized)
-  }, [searchParams, setSearchParams])
+  }, [])
 
   useEffect(() => {
     const isRootOrList = location.pathname === "/" || /^\/(notes|bookmarks|tasks|tag)\//.test(location.pathname)
@@ -54,52 +62,48 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
 
+  useEffect(() => {
+    api.get("/config").then(res => {
+      if (res.data.version) {
+        document.title = `znote (v${res.data.version})`
+        checkVersionSync(res.data.version)
+      }
+    }).catch(console.error)
+  }, [])
+
   return (
     <>
       <Layout viewMode={viewMode} setViewMode={setViewMode}>
-        <AnimatePresence mode="wait">
-          {viewMode === "explorer" ? (
-            <motion.div
-              key="explorer"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.02 }}
-              transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-            >
-              <div className="space-y-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
-                    <Share2 size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold tracking-tight leading-none">Knowledge Graph</h2>
-                    <p className="text-sm text-muted-foreground mt-1">Spatial visualization of connections.</p>
-                  </div>
+        {viewMode === "explorer" ? (
+          <div key="explorer">
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
+                  <Share2 size={24} />
                 </div>
-                <GraphView />
+                <div>
+                  <h2 className="text-xl font-bold tracking-tight leading-none">Knowledge Graph</h2>
+                  <p className="text-sm text-muted-foreground mt-1">Spatial visualization of connections.</p>
+                </div>
               </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key={viewMode}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-            >
-              <Routes>
-                <Route path="/" element={<HomeView />} />
-                <Route path="/notes" element={<EntityListView type="note" />} />
-                <Route path="/bookmarks" element={<EntityListView type="bookmark" />} />
-                <Route path="/tasks" element={<EntityListView type="task" />} />
-                <Route path="/tag/*" element={<TagResultsView />} />
-                <Route path="/note/:id" element={<DynamicEntityView type="note" viewMode={viewMode} />} />
-                <Route path="/bookmark/:id" element={<DynamicEntityView type="bookmark" viewMode={viewMode} />} />
-                <Route path="/task/:id" element={<DynamicEntityView type="task" viewMode={viewMode} />} />
-              </Routes>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <GraphView />
+            </div>
+          </div>
+        ) : (
+          <div key={viewMode}>
+            <Routes>
+              <Route path="/" element={<HomeView />} />
+              <Route path="/notes" element={<EntityListView type="note" />} />
+              <Route path="/bookmarks" element={<EntityListView type="bookmark" />} />
+              <Route path="/tasks" element={<EntityListView type="task" />} />
+              <Route path="/tag/*" element={<TagResultsView />} />
+              <Route path="/note/:id" element={<DynamicEntityView type="note" viewMode={viewMode} />} />
+              <Route path="/bookmark/:id" element={<DynamicEntityView type="bookmark" viewMode={viewMode} />} />
+              <Route path="/task/:id" element={<DynamicEntityView type="task" viewMode={viewMode} />} />
+              <Route path="/resolve/:id" element={<ResolveView />} />
+            </Routes>
+          </div>
+        )}
       </Layout>
 
       <TokenModal isOpen={needsToken} onSave={() => setNeedsToken(false)} />
@@ -122,11 +126,7 @@ const TokenModal = ({ isOpen, onSave }: { isOpen: boolean; onSave: () => void })
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-sm bg-card border rounded-2xl shadow-2xl p-6 space-y-6"
-      >
+      <div className="w-full max-w-sm bg-card border rounded-2xl shadow-2xl p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
             <Lock size={20} />
@@ -146,12 +146,12 @@ const TokenModal = ({ isOpen, onSave }: { isOpen: boolean; onSave: () => void })
               placeholder="Enter token..."
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className="w-full bg-muted/40 border-transparent border focus:border-primary focus:bg-background rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none transition-all"
+              className="w-full bg-muted/40 border-transparent border focus:border-primary focus:bg-background rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none"
             />
           </div>
           <button
             type="submit"
-            className="w-full bg-primary text-primary-foreground font-bold py-2.5 rounded-xl text-sm shadow-lg hover:opacity-90 transition-opacity"
+            className="w-full bg-primary text-primary-foreground font-bold py-2.5 rounded-xl text-sm shadow-lg"
           >
             Access Instance
           </button>
@@ -160,7 +160,7 @@ const TokenModal = ({ isOpen, onSave }: { isOpen: boolean; onSave: () => void })
         <div className="text-[10px] text-center text-muted-foreground leading-relaxed px-4">
           If you don't have a token, set <code className="bg-muted px-1 rounded">ZNOTE_WEB_UI_TOKEN</code> in your environment before running the server.
         </div>
-      </motion.div>
+      </div>
     </div>
   )
 }
@@ -172,6 +172,25 @@ const HomeView = () => (
     <p className="text-muted-foreground max-w-sm mx-auto">Select an entity from the sidebar to find something specific.</p>
   </div>
 )
+
+const ResolveView = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (id) {
+      api.get(`/resolve/${id}`).then(res => {
+        navigate(`/${res.data.type}/${res.data.id}`, { replace: true });
+      }).catch(() => navigate('/notes'));
+    }
+  }, [id, navigate]);
+
+  return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="w-8 h-8 text-primary" />
+    </div>
+  );
+};
 
 const DynamicEntityView = ({ type, viewMode }: { type: 'note' | 'bookmark' | 'task', viewMode: ViewMode }) => {
   const { id } = useParams()
@@ -203,7 +222,7 @@ const DynamicEntityView = ({ type, viewMode }: { type: 'note' | 'bookmark' | 'ta
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <Loader2 className="w-8 h-8 text-primary" />
         <p className="text-sm text-muted-foreground italic">Fetching {type}...</p>
       </div>
     )

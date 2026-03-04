@@ -27,7 +27,11 @@ fn parse_tags(raw: &str) -> Vec<String> {
 pub fn add(data_dir: &Path, args: &NoteAddArgs) -> Result<()> {
     let tags = args.tags.as_deref().map(parse_tags).unwrap_or_default();
     let links = args.links.as_deref().map(parse_tags).unwrap_or_default();
-    let content = args.content.clone();
+    let content = if args.content == "-" {
+        super::read_stdin()?
+    } else {
+        args.content.clone()
+    };
     let title = args.title.clone().unwrap_or_default();
     let mut note = Note::new(title.clone(), content, tags);
     let mut clean_links = Vec::new();
@@ -171,8 +175,13 @@ pub fn update(data_dir: &Path, args: &UpdateArgs) -> Result<()> {
     if let Some(title) = &args.title {
         note.title = title.clone();
     }
-    if let Some(content) = &args.content {
-        note.content = content.clone();
+    if let Some(content_raw) = &args.content {
+        let content = if content_raw == "-" {
+            super::read_stdin()?
+        } else {
+            content_raw.clone()
+        };
+        note.content = content;
     }
     if let Some(tags_raw) = &args.tags {
         note.tags = parse_tags(tags_raw);

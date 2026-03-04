@@ -9,13 +9,13 @@
 ## Project Layout
 - `src/main.rs`: Entry point & dispatch.
 - `src/commands/mod.rs`: `clap` structs/enums.
-- `src/handlers/`: Logic (note, bookmark, task, search, graph, validate, completions).
+- `src/handlers/`: Logic (note, bookmark, task, search, graph, validate, completions). Includes `read_stdin` helper in `mod.rs`.
 - `src/models/`: Structs (note, bookmark, task) with lifecycle logic.
 - `src/storage/`: persistence to `{dir}/{type}/{id}.md`.
 - `examples/`: Reference data for development.
 
 ## CLI Commands
-- `note | bookmark | task`: `add | list | view | update | edit | delete <id>`
+- `note | bookmark | task`: `add | list | view | update | edit | delete <id>` (supports `-` for stdin in content/description)
 - `task item`: `add | check | uncheck | update | remove`
 - `search`: `rip <args>` (ripgrep) | `query <expr>` (boolean logic: `tag:x AND type:y`)
 - `graph`: `show | dot | json | mermaid` (flags: `--tag`, `-y/--entity-type`, `--without-isolated`)
@@ -31,7 +31,7 @@
 - **Development**: Follow TDD (`src/tests.rs`). Branch off `main`. 
   - Use `make lint && make test` for validation.
   - Use `make dev` + `make ui-watch` (separate terminals) for auto-reloading development.
-- **Commits**: Follow `docs/git_commit_message_format.md`. Use relative paths to avoid PII leak.
+- **Commits**: Follow `docs/git_commit_message_format.md`. Use relative paths to avoid PII leak. NEVER include absolute paths or local system information in commit messages.
 
 ## Development & CI Best Practices
 - **CI Dependencies**: Ensure `ripgrep` (`apt-get install ripgrep`) and Node.js (`ui/dist/` build) are available before running Rust tests. The binary embeds UI assets at compile-time.
@@ -45,4 +45,5 @@
 - Web UI (React/Vite) integrated with token-based authentication and live storage connection.
 - Mermaid.js output supported with custom styling.
 - Shell completions and ID autocompletion integrated.
+- Support for reading content from stdin via `-` argument for `add` and `update` commands.
 - Data directory defaults to `~/.local/share/znote/`, override with `ZNOTE_DIR`.

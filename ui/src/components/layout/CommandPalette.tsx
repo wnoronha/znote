@@ -1,19 +1,32 @@
 import React, { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
-import { motion, AnimatePresence } from "framer-motion"
-import { Search, FileText, Bookmark, CheckSquare, Settings } from "lucide-react"
+
+import { Search, FileText, Bookmark, CheckSquare, Command } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 export const CommandPalette: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false)
+    const [selectedIndex, setSelectedIndex] = useState(0)
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "k") {
                 e.preventDefault()
                 setIsOpen(!isOpen)
+                setSelectedIndex(0)
             }
             if (e.key === "Escape") {
                 setIsOpen(false)
+            }
+            if (isOpen) {
+                if (e.key === "ArrowDown") {
+                    e.preventDefault()
+                    setSelectedIndex(prev => (prev + 1) % 6) // Total items across categories
+                }
+                if (e.key === "ArrowUp") {
+                    e.preventDefault()
+                    setSelectedIndex(prev => (prev - 1 + 6) % 6)
+                }
             }
         }
         window.addEventListener("keydown", handleKeyDown)
@@ -21,16 +34,13 @@ export const CommandPalette: React.FC = () => {
     }, [isOpen])
 
     return (
-        <AnimatePresence>
+        <>
             {isOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-start justify-center pt-24 bg-background/80 backdrop-blur-sm"
                     onClick={() => setIsOpen(false)}
                 >
-                    <motion.div
-                        initial={{ scale: 0.95, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.95, opacity: 0 }}
+                    <div
                         className="w-full max-w-xl bg-card border rounded-xl shadow-2xl overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -56,8 +66,9 @@ export const CommandPalette: React.FC = () => {
                             <Section title="Tasks">
                                 <CommandItem icon={<CheckSquare size={16} />} title="Ship v1" id="e5f6g7h8-9012-3456-7890-abcdef123456" type="task" onClick={() => setIsOpen(false)} />
                             </Section>
-                            <Section title="Settings">
-                                <CommandItem icon={<Settings size={16} />} title="Settings & Config" onClick={() => setIsOpen(false)} />
+                            <Section title="Navigation">
+                                <CommandItem icon={<Search size={16} />} title="Go to Search" onClick={() => setIsOpen(false)} selected={selectedIndex === 4} />
+                                <CommandItem icon={<Command size={16} />} title="View Keyboard Shortcuts" onClick={() => { setIsOpen(false); window.dispatchEvent(new KeyboardEvent('keydown', { key: '?' })); }} selected={selectedIndex === 5} />
                             </Section>
                         </div>
 
@@ -68,10 +79,10 @@ export const CommandPalette: React.FC = () => {
                             </div>
                             <span>znote v0.1.0</span>
                         </div>
-                    </motion.div>
+                    </div>
                 </div>
             )}
-        </AnimatePresence>
+        </>
     )
 }
 
@@ -87,15 +98,29 @@ const CommandItem: React.FC<{
     title: string;
     id?: string;
     type?: 'note' | 'bookmark' | 'task';
-    onClick: () => void
-}> = ({ icon, title, id, type, onClick }) => {
+    onClick: () => void;
+    selected?: boolean;
+}> = ({ icon, title, id, type, onClick, selected }) => {
     const content = (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors hover:bg-muted group" onClick={onClick}>
+        <div
+            className={cn(
+                "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer  group",
+                selected ? "bg-primary text-primary-foreground shadow-lg scale-[1.02]" : "hover:bg-muted text-foreground"
+            )}
+            onClick={onClick}
+        >
             <div className="flex items-center gap-3">
-                <span className="text-muted-foreground group-hover:text-primary transition-colors">{icon}</span>
+                <span className={cn("", selected ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary")}>{icon}</span>
                 <span className="text-sm font-medium">{title}</span>
             </div>
-            {id && <span className="text-[10px] font-mono text-muted-foreground border px-1.5 py-0.5 rounded bg-muted/50 uppercase">{id.substring(0, 8)}</span>}
+            {id && (
+                <span className={cn(
+                    "text-[10px] font-mono border px-1.5 py-0.5 rounded uppercase",
+                    selected ? "bg-white/20 border-white/20 text-white" : "text-muted-foreground bg-muted/50"
+                )}>
+                    {id.substring(0, 8)}
+                </span>
+            )}
         </div>
     )
 
