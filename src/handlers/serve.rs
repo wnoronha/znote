@@ -858,10 +858,8 @@ async fn api_graph(State(state): State<AppState>) -> impl IntoResponse {
                         // Find first ID that starts with target_prefix
                         use std::ops::Bound;
                         let mut range = valid_ids.range((Bound::Included(target_prefix.to_string()), Bound::Unbounded));
-                        if let Some(found) = range.next() {
-                            if found.starts_with(target_prefix) {
-                                resolved_target = Some(found.clone());
-                            }
+                        if let Some(found) = range.next() && found.starts_with(target_prefix) {
+                            resolved_target = Some(found.clone());
                         }
                     }
 

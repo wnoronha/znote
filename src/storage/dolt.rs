@@ -41,7 +41,7 @@ impl DoltStorage {
         tracing::info!("Starting Dolt SQL server on {}:{}", host, port);
         let _child = Command::new("dolt")
             .current_dir(&self.data_dir)
-            .args(&["sql-server", "--host", &host, "--port", &port])
+            .args(["sql-server", "--host", &host, "--port", &port])
             .spawn()
             .context("Failed to start dolt sql-server")?;
             
@@ -116,10 +116,10 @@ impl DoltStorage {
             mysql::Value::Bytes(b) => {
                 if let Ok(s) = String::from_utf8(b.clone()) {
                     // Dolt returns JSON strings or arrays occasionally
-                    if (s.starts_with('[') && s.ends_with(']')) || (s.starts_with('{') && s.ends_with('}')) {
-                        if let Ok(parsed) = serde_json::from_str(&s) {
-                            return parsed;
-                        }
+                    if ((s.starts_with('[') && s.ends_with(']')) || (s.starts_with('{') && s.ends_with('}')))
+                        && let Ok(parsed) = serde_json::from_str(&s)
+                    {
+                        return parsed;
                     }
                     serde_json::Value::String(s)
                 } else {
