@@ -31,18 +31,22 @@ fn print_version() {
 #[tokio::main]
 async fn main() -> Result<()> {
     use tracing_subscriber::{EnvFilter, fmt, prelude::*};
-    let filter = EnvFilter::try_from_env("ZNOTE_LOG").or_else(|_| EnvFilter::try_from_env("RUST_LOG")).unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::registry().with(fmt::layer()).with(filter).init();
+    let filter = EnvFilter::try_from_env("ZNOTE_LOG")
+        .or_else(|_| EnvFilter::try_from_env("RUST_LOG"))
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(filter)
+        .init();
     let cli = Cli::parse();
     let data_dir = expand_data_dir(&cli.data_dir)?;
-        if crate::storage::is_dolt_backend() {
+    if crate::storage::is_dolt_backend() {
         let db = crate::storage::dolt::DoltStorage::new(&data_dir);
         if let Commands::Serve(_) = &cli.command {
             let _ = db.start_server();
         }
         let _ = db.init_db();
     }
-
 
     match cli.command {
         Commands::Note { command } => match command {
@@ -97,7 +101,10 @@ async fn main() -> Result<()> {
         Commands::Validate { command } => match command {
             ValidateCommands::Frontmatter => handlers::validate::frontmatter(&data_dir)?,
         },
-        Commands::Sync => { storage::sync(&data_dir)?; println!("Storage synchronized with file system successfully."); }
+        Commands::Sync => {
+            storage::sync(&data_dir)?;
+            println!("Storage synchronized with file system successfully.");
+        }
         Commands::Dolt { command } => handlers::dolt::run(&data_dir, &command)?,
         Commands::Graph(args) => handlers::graph::run(&data_dir, &args)?,
         Commands::Serve(args) => handlers::serve::run(&args.host, args.port, &data_dir).await?,

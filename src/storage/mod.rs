@@ -113,8 +113,6 @@ pub struct Frontmatter {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-
-
 fn vec_to_space_string(v: &[String]) -> String {
     v.join(" ")
 }
@@ -591,7 +589,8 @@ pub fn format_links(data_dir: &Path, links: &[String]) -> Vec<String> {
         .iter()
         .map(|link| {
             if let Some((rel, target)) = link.split_once(':') {
-                let (entity_type, _) = get_entity_type(data_dir, target).unwrap_or(("unknown", target.to_string()));
+                let (entity_type, _) =
+                    get_entity_type(data_dir, target).unwrap_or(("unknown", target.to_string()));
                 format!("[{}] {}: {}", entity_type, rel, target)
             } else {
                 link.clone()
@@ -676,8 +675,8 @@ pub fn load_note(data_dir: &std::path::Path, id: &str) -> Result<Note> {
         let db = dolt::DoltStorage::new(data_dir);
         // db.init_db();
         let dir = entity_dir(data_dir, "notes")?;
-    let full_id = resolve_id(&dir, id)?;
-    db.load_note(&full_id)
+        let full_id = resolve_id(&dir, id)?;
+        db.load_note(&full_id)
     } else {
         crate::storage::load_note_fs(data_dir, id)
     }
@@ -687,8 +686,8 @@ pub fn delete_note(data_dir: &std::path::Path, id: &str) -> Result<()> {
         let db = dolt::DoltStorage::new(data_dir);
         // db.init_db();
         let dir = entity_dir(data_dir, "notes")?;
-    let full_id = resolve_id(&dir, id)?;
-    db.delete_note(&full_id)
+        let full_id = resolve_id(&dir, id)?;
+        db.delete_note(&full_id)
     } else {
         crate::storage::delete_note_fs(data_dir, id)
     }
@@ -717,8 +716,8 @@ pub fn load_bookmark(data_dir: &std::path::Path, id: &str) -> Result<Bookmark> {
         let db = dolt::DoltStorage::new(data_dir);
         // db.init_db();
         let dir = entity_dir(data_dir, "bookmarks")?;
-    let full_id = resolve_id(&dir, id)?;
-    db.load_bookmark(&full_id)
+        let full_id = resolve_id(&dir, id)?;
+        db.load_bookmark(&full_id)
     } else {
         crate::storage::load_bookmark_fs(data_dir, id)
     }
@@ -728,8 +727,8 @@ pub fn delete_bookmark(data_dir: &std::path::Path, id: &str) -> Result<()> {
         let db = dolt::DoltStorage::new(data_dir);
         // db.init_db();
         let dir = entity_dir(data_dir, "bookmarks")?;
-    let full_id = resolve_id(&dir, id)?;
-    db.delete_bookmark(&full_id)
+        let full_id = resolve_id(&dir, id)?;
+        db.delete_bookmark(&full_id)
     } else {
         crate::storage::delete_bookmark_fs(data_dir, id)
     }
@@ -758,8 +757,8 @@ pub fn load_task(data_dir: &std::path::Path, id: &str) -> Result<Task> {
         let db = dolt::DoltStorage::new(data_dir);
         // db.init_db();
         let dir = entity_dir(data_dir, "tasks")?;
-    let full_id = resolve_id(&dir, id)?;
-    db.load_task(&full_id)
+        let full_id = resolve_id(&dir, id)?;
+        db.load_task(&full_id)
     } else {
         crate::storage::load_task_fs(data_dir, id)
     }
@@ -769,8 +768,8 @@ pub fn delete_task(data_dir: &std::path::Path, id: &str) -> Result<()> {
         let db = dolt::DoltStorage::new(data_dir);
         // db.init_db();
         let dir = entity_dir(data_dir, "tasks")?;
-    let full_id = resolve_id(&dir, id)?;
-    db.delete_task(&full_id)
+        let full_id = resolve_id(&dir, id)?;
+        db.delete_task(&full_id)
     } else {
         crate::storage::delete_task_fs(data_dir, id)
     }
@@ -787,7 +786,9 @@ pub fn list_tasks(data_dir: &std::path::Path) -> Result<Vec<Task>> {
 
 pub fn sync(data_dir: &std::path::Path) -> Result<()> {
     if !is_dolt_backend() {
-        anyhow::bail!("Sync is only supported when using the dolt backend (ZNOTE_STORAGE_BACKEND=dolt)");
+        anyhow::bail!(
+            "Sync is only supported when using the dolt backend (ZNOTE_STORAGE_BACKEND=dolt)"
+        );
     }
     let db = dolt::DoltStorage::new(data_dir);
     // db.init_db();

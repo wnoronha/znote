@@ -1,11 +1,11 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-use std::sync::OnceLock;
 use anyhow::{Context, Result};
 use chrono::{DateTime, TimeZone, Utc};
-use std::path::{Path, PathBuf};
-use std::process::Command;
 use mysql::prelude::*;
 use mysql::{OptsBuilder, Pool};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::OnceLock;
 
 use crate::models::bookmark::Bookmark;
 use crate::models::note::Note;
@@ -21,7 +21,8 @@ pub struct DoltStorage {
 impl DoltStorage {
     fn get_db_name(&self) -> String {
         std::env::var("ZNOTE_DOLT_DB").unwrap_or_else(|_| {
-            self.data_dir.file_name()
+            self.data_dir
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("znote")
                 .to_string()
@@ -31,9 +32,13 @@ impl DoltStorage {
     pub fn start_server(&self) -> Result<()> {
         let host = std::env::var("ZNOTE_DOLT_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
         let port = std::env::var("ZNOTE_DOLT_PORT").unwrap_or_else(|_| "3306".to_string());
-        
+
         // Check if already running
-        if self.get_pool().and_then(|p| p.get_conn().context("Check failed")).is_ok() {
+        if self
+            .get_pool()
+            .and_then(|p| p.get_conn().context("Check failed"))
+            .is_ok()
+        {
             tracing::debug!("Dolt SQL server already running on {}:{}", host, port);
             return Ok(());
         }
@@ -44,7 +49,7 @@ impl DoltStorage {
             .args(["sql-server", "--host", &host, "--port", &port])
             .spawn()
             .context("Failed to start dolt sql-server")?;
-            
+
         // Wait a bit for it to start
         std::thread::sleep(std::time::Duration::from_secs(2));
         Ok(())
@@ -75,7 +80,7 @@ impl DoltStorage {
         Ok(String::from_utf8(output.stdout)?)
     }
 
-        fn get_pool(&self) -> Result<Pool> {
+    fn get_pool(&self) -> Result<Pool> {
         if let Some(pool) = DOLT_POOL.get() {
             return Ok(pool.clone());
         }
@@ -97,17 +102,17 @@ impl DoltStorage {
         if !pass.is_empty() {
             builder = builder.pass(Some(pass));
         }
-        
+
         // Use a persistent pool with 1-10 connections
-        let opts = builder.pool_opts(mysql::PoolOpts::default()
-            .with_constraints(mysql::PoolConstraints::new(1, 10).unwrap()));
+        let opts = builder.pool_opts(
+            mysql::PoolOpts::default()
+                .with_constraints(mysql::PoolConstraints::new(1, 10).unwrap()),
+        );
 
         let pool = Pool::new(opts).context("Failed to configure MySQL pool")?;
         let _ = DOLT_POOL.set(pool.clone());
         Ok(pool)
     }
-
-
 
     /// Convert mysql::Value to serde_json::Value
     fn mysql_val_to_json(&self, val: mysql::Value) -> serde_json::Value {
@@ -116,7 +121,8 @@ impl DoltStorage {
             mysql::Value::Bytes(b) => {
                 if let Ok(s) = String::from_utf8(b.clone()) {
                     // Dolt returns JSON strings or arrays occasionally
-                    if ((s.starts_with('[') && s.ends_with(']')) || (s.starts_with('{') && s.ends_with('}')))
+                    if ((s.starts_with('[') && s.ends_with(']'))
+                        || (s.starts_with('{') && s.ends_with('}')))
                         && let Ok(parsed) = serde_json::from_str(&s)
                     {
                         return parsed;
@@ -125,17 +131,24 @@ impl DoltStorage {
                 } else {
                     serde_json::Value::String(format!("{:?}", b))
                 }
-            },
+            }
             mysql::Value::Int(i) => serde_json::json!(i),
             mysql::Value::UInt(u) => serde_json::json!(u),
             mysql::Value::Float(f) => serde_json::json!(f),
             mysql::Value::Double(d) => serde_json::json!(d),
-            mysql::Value::Date(y, m, d, h, min, s, _u) => {
-                serde_json::Value::String(format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", y, m, d, h, min, s))
-            },
+            mysql::Value::Date(y, m, d, h, min, s, _u) => serde_json::Value::String(format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                y, m, d, h, min, s
+            )),
             mysql::Value::Time(neg, d, h, m, s, _u) => {
                 let sign = if neg { "-" } else { "" };
-                serde_json::Value::String(format!("{}{:02}:{:02}:{:02}", sign, h + (d as u8 * 24), m, s))
+                serde_json::Value::String(format!(
+                    "{}{:02}:{:02}:{:02}",
+                    sign,
+                    h + (d as u8 * 24),
+                    m,
+                    s
+                ))
             }
         }
     }
@@ -153,12 +166,15 @@ impl DoltStorage {
     /// Read JSON output from a `dolt sql` command
     pub fn run_sql(&self, query: &str) -> Result<serde_json::Value> {
         let is_select = query.trim_start().to_lowercase().starts_with("select");
-        
-        match self.get_pool().and_then(|pool| pool.get_conn().context("Connection failed")) {
+
+        match self
+            .get_pool()
+            .and_then(|pool| pool.get_conn().context("Connection failed"))
+        {
             Ok(mut conn) => {
                 let dbname = self.get_db_name();
-                let _ = conn.query_drop(format!("USE `{}`", dbname)); 
-                
+                let _ = conn.query_drop(format!("USE `{}`", dbname));
+
                 tracing::debug!("Executing SQL via MySQL: {}", query);
                 let start = std::time::Instant::now();
                 if is_select {
@@ -166,7 +182,8 @@ impl DoltStorage {
                     tracing::debug!("SQL took {:?}", start.elapsed());
                     match result {
                         Ok(rows) => {
-                            let json_rows: Vec<serde_json::Value> = rows.into_iter().map(|r| self.row_to_json(r)).collect();
+                            let json_rows: Vec<serde_json::Value> =
+                                rows.into_iter().map(|r| self.row_to_json(r)).collect();
                             return Ok(serde_json::json!({"rows": json_rows}));
                         }
                         Err(e) => {
@@ -189,7 +206,7 @@ impl DoltStorage {
             }
         }
 
-        // Fallback to Dolt CLI 
+        // Fallback to Dolt CLI
         tracing::debug!("Executing SQL via Dolt CLI: {}", query);
         let start = std::time::Instant::now();
         let output = self.run_dolt(&["sql", "-q", query, "-r", "json"])?;
@@ -197,8 +214,11 @@ impl DoltStorage {
         if output.trim().is_empty() {
             return Ok(serde_json::json!({"rows": []}));
         }
-        let mut val: serde_json::Value = serde_json::from_str(&output).context("Failed to parse dolt json output")?;
-        if val.get("rows").is_none() && let Some(obj) = val.as_object_mut() {
+        let mut val: serde_json::Value =
+            serde_json::from_str(&output).context("Failed to parse dolt json output")?;
+        if val.get("rows").is_none()
+            && let Some(obj) = val.as_object_mut()
+        {
             obj.insert("rows".to_string(), serde_json::json!([]));
         }
         Ok(val)
@@ -231,7 +251,7 @@ impl DoltStorage {
         }
 
         // Setup notes
-                // Ensure database exists if using MySQL
+        // Ensure database exists if using MySQL
         let dbname = self.get_db_name();
         let _ = self.run_sql(&format!("CREATE DATABASE IF NOT EXISTS `{}`", dbname));
 
@@ -436,10 +456,13 @@ impl DoltStorage {
     }
 
     // -----------------------------------------------------------------------
-    
+
     fn fetch_all_tags(&self) -> Result<std::collections::HashMap<String, Vec<String>>> {
         let res = self.run_sql("SELECT entity_id, tag FROM tags ORDER BY entity_id, tag")?;
-        let rows = res.get("rows").and_then(|r| r.as_array()).context("Missing rows")?;
+        let rows = res
+            .get("rows")
+            .and_then(|r| r.as_array())
+            .context("Missing rows")?;
         let mut map = std::collections::HashMap::new();
         for r in rows {
             let eid = r["entity_id"].as_str().unwrap_or("").to_string();
@@ -450,14 +473,20 @@ impl DoltStorage {
     }
 
     fn fetch_all_links(&self) -> Result<std::collections::HashMap<String, Vec<String>>> {
-        let res = self.run_sql("SELECT source_id, rel_type, target_id FROM links ORDER BY source_id")?;
-        let rows = res.get("rows").and_then(|r| r.as_array()).context("Missing rows")?;
+        let res =
+            self.run_sql("SELECT source_id, rel_type, target_id FROM links ORDER BY source_id")?;
+        let rows = res
+            .get("rows")
+            .and_then(|r| r.as_array())
+            .context("Missing rows")?;
         let mut map = std::collections::HashMap::new();
         for r in rows {
             let sid = r["source_id"].as_str().unwrap_or("").to_string();
             let rel = r["rel_type"].as_str().unwrap_or("").to_string();
             let tid = r["target_id"].as_str().unwrap_or("").to_string();
-            map.entry(sid).or_insert_with(Vec::new).push(format!("{}:{}", rel, tid));
+            map.entry(sid)
+                .or_insert_with(Vec::new)
+                .push(format!("{}:{}", rel, tid));
         }
         Ok(map)
     }
@@ -523,12 +552,15 @@ impl DoltStorage {
         Ok(())
     }
 
-pub fn list_notes(&self) -> Result<Vec<Note>> {
+    pub fn list_notes(&self) -> Result<Vec<Note>> {
         let mut all_tags = self.fetch_all_tags()?;
         let mut all_links = self.fetch_all_links()?;
 
         let res = self.run_sql("SELECT * FROM notes")?;
-        let rows = res.get("rows").and_then(|r| r.as_array()).context("Missing rows")?;
+        let rows = res
+            .get("rows")
+            .and_then(|r| r.as_array())
+            .context("Missing rows")?;
         let mut notes = Vec::new();
         for row in rows {
             let id = row["id"].as_str().unwrap_or("").to_string();
@@ -621,12 +653,15 @@ pub fn list_notes(&self) -> Result<Vec<Note>> {
         Ok(())
     }
 
-pub fn list_bookmarks(&self) -> Result<Vec<Bookmark>> {
+    pub fn list_bookmarks(&self) -> Result<Vec<Bookmark>> {
         let mut all_tags = self.fetch_all_tags()?;
         let mut all_links = self.fetch_all_links()?;
 
         let res = self.run_sql("SELECT * FROM bookmarks")?;
-        let rows = res.get("rows").and_then(|r| r.as_array()).context("Missing rows")?;
+        let rows = res
+            .get("rows")
+            .and_then(|r| r.as_array())
+            .context("Missing rows")?;
         let mut bms = Vec::new();
         for row in rows {
             let id = row["id"].as_str().unwrap_or("").to_string();
@@ -640,7 +675,11 @@ pub fn list_bookmarks(&self) -> Result<Vec<Bookmark>> {
                 id,
                 url: row["url"].as_str().unwrap_or("").to_string(),
                 title: row["title"].as_str().unwrap_or("").to_string(),
-                description: if desc_str.is_empty() { None } else { Some(desc_str.to_string()) },
+                description: if desc_str.is_empty() {
+                    None
+                } else {
+                    Some(desc_str.to_string())
+                },
                 tags,
                 links,
                 created_at,
@@ -738,12 +777,15 @@ pub fn list_bookmarks(&self) -> Result<Vec<Bookmark>> {
         Ok(())
     }
 
-pub fn list_tasks(&self) -> Result<Vec<Task>> {
+    pub fn list_tasks(&self) -> Result<Vec<Task>> {
         let mut all_tags = self.fetch_all_tags()?;
         let mut all_links = self.fetch_all_links()?;
 
         let res = self.run_sql("SELECT * FROM tasks")?;
-        let rows = res.get("rows").and_then(|r| r.as_array()).context("Missing rows")?;
+        let rows = res
+            .get("rows")
+            .and_then(|r| r.as_array())
+            .context("Missing rows")?;
         let mut tasks = Vec::new();
         for row in rows {
             let id = row["id"].as_str().unwrap_or("").to_string();
@@ -752,7 +794,7 @@ pub fn list_tasks(&self) -> Result<Vec<Task>> {
             let updated_at = self.parse_datetime_str(row["updated_at"].as_str().unwrap_or(""))?;
             let tags = all_tags.remove(&id).unwrap_or_default();
             let links = all_links.remove(&id).unwrap_or_default();
-            
+
             let items: Vec<TaskItem> = if let Some(items_val) = row.get("items") {
                 if let Some(items_str) = items_val.as_str() {
                     serde_json::from_str(items_str).unwrap_or_default()
@@ -766,7 +808,11 @@ pub fn list_tasks(&self) -> Result<Vec<Task>> {
             tasks.push(Task {
                 id,
                 title: row["title"].as_str().unwrap_or("").to_string(),
-                description: if desc_str.is_empty() { None } else { Some(desc_str.to_string()) },
+                description: if desc_str.is_empty() {
+                    None
+                } else {
+                    Some(desc_str.to_string())
+                },
                 items,
                 tags,
                 links,

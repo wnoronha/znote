@@ -20,7 +20,14 @@ pub fn show(data_dir: &Path) -> Result<()> {
         let port = std::env::var("ZNOTE_DOLT_PORT").unwrap_or_else(|_| "3306".to_string());
         let user = std::env::var("ZNOTE_DOLT_USER").unwrap_or_else(|_| "root".to_string());
         let dbname = std::env::var("ZNOTE_DOLT_DB").unwrap_or_else(|_| "znote".to_string());
-        println!("{:<15} {}@{}:{}/{}", "Dolt server:".bold(), user, host, port, dbname);
+        println!(
+            "{:<15} {}@{}:{}/{}",
+            "Dolt server:".bold(),
+            user,
+            host,
+            port,
+            dbname
+        );
     }
     Ok(())
 }

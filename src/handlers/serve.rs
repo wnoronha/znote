@@ -1,4 +1,3 @@
-use tower_http::trace::TraceLayer;
 use anyhow::Result;
 use axum::{
     Json, Router,
@@ -16,6 +15,7 @@ use std::env;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tower_http::trace::TraceLayer;
 
 use crate::handlers::query;
 use crate::storage;
@@ -47,8 +47,6 @@ pub async fn run(host: &str, port: u16, data_dir: &Path) -> Result<()> {
         data_dir: Arc::new(data_dir.to_path_buf()),
         token: Some(token.clone()),
     };
-
-    
 
     let app = create_router(state);
 
@@ -99,7 +97,8 @@ fn create_router(state: AppState) -> Router {
         .nest("/api", api_routes)
         .route("/", get(serve_index))
         .route("/{*file}", get(serve_asset))
-        .fallback(serve_index).layer(TraceLayer::new_for_http())
+        .fallback(serve_index)
+        .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -120,7 +119,14 @@ struct ConfigResponse {
 async fn api_get_config() -> impl IntoResponse {
     let starred_tag = env::var("ZNOTE_STARRED").unwrap_or_else(|_| "#starred".to_string());
     let version = env!("CARGO_PKG_VERSION").to_string();
-    (StatusCode::OK, Json(ConfigResponse { starred_tag, version })).into_response()
+    (
+        StatusCode::OK,
+        Json(ConfigResponse {
+            starred_tag,
+            version,
+        }),
+    )
+        .into_response()
 }
 
 #[derive(serde::Serialize)]
@@ -147,9 +153,10 @@ async fn api_get_links(
 
     if crate::storage::is_dolt_backend() {
         let db = crate::storage::dolt::DoltStorage::new(&state.data_dir);
-        
+
         // 1. Outgoing LINKS from metadata
-        let sql_out = format!("SELECT l.rel_type, l.target_id, 
+        let sql_out = format!(
+            "SELECT l.rel_type, l.target_id, 
                                      n.id as n_id, n.title as n_title, 
                                      b.id as b_id, b.title as b_title, 
                                      t.id as t_id, t.title as t_title 
@@ -157,14 +164,17 @@ async fn api_get_links(
                              LEFT JOIN notes n ON n.id LIKE CONCAT(l.target_id, '%')
                              LEFT JOIN bookmarks b ON b.id LIKE CONCAT(l.target_id, '%')
                              LEFT JOIN tasks t ON t.id LIKE CONCAT(l.target_id, '%')
-                             WHERE l.source_id = '{}' OR l.source_id LIKE '{}%'", id, id);
-        
+                             WHERE l.source_id = '{}' OR l.source_id LIKE '{}%'",
+            id, id
+        );
+
         if let Some(rows) = db.run_sql(&sql_out).ok().and_then(|res| {
-            res.get("rows").and_then(|r| r.as_array().map(|a| a.to_owned()))
+            res.get("rows")
+                .and_then(|r| r.as_array().map(|a| a.to_owned()))
         }) {
             for r in rows {
                 let rel = r["rel_type"].as_str().unwrap_or("rel");
-                
+
                 let (target_id, title, etype) = if let Some(nid) = r["n_id"].as_str() {
                     (nid, r["n_title"].as_str().unwrap_or(nid), "note")
                 } else if let Some(bid) = r["b_id"].as_str() {
@@ -186,7 +196,8 @@ async fn api_get_links(
         }
 
         // 2. Incoming LINKS
-        let sql_in = format!("SELECT l.source_id, l.rel_type, 
+        let sql_in = format!(
+            "SELECT l.source_id, l.rel_type, 
                                     n.id as n_id, n.title as n_title, 
                                     b.id as b_id, b.title as b_title, 
                                     t.id as t_id, t.title as t_title 
@@ -194,14 +205,17 @@ async fn api_get_links(
                             LEFT JOIN notes n ON n.id LIKE CONCAT(l.source_id, '%')
                             LEFT JOIN bookmarks b ON b.id LIKE CONCAT(l.source_id, '%')
                             LEFT JOIN tasks t ON t.id LIKE CONCAT(l.source_id, '%')
-                            WHERE l.target_id = '{}' OR l.target_id LIKE '{}%'", id, id);
-        
+                            WHERE l.target_id = '{}' OR l.target_id LIKE '{}%'",
+            id, id
+        );
+
         if let Some(rows) = db.run_sql(&sql_in).ok().and_then(|res| {
-            res.get("rows").and_then(|r| r.as_array().map(|a| a.to_owned()))
+            res.get("rows")
+                .and_then(|r| r.as_array().map(|a| a.to_owned()))
         }) {
             for r in rows {
                 let rel = r["rel_type"].as_str().unwrap_or("rel");
-                
+
                 let (source_id, title, etype) = if let Some(nid) = r["n_id"].as_str() {
                     (nid, r["n_title"].as_str().unwrap_or(nid), "note")
                 } else if let Some(bid) = r["b_id"].as_str() {
@@ -548,7 +562,10 @@ async fn api_list_tags(State(state): State<AppState>) -> impl IntoResponse {
         let sql = "SELECT DISTINCT tag FROM tags ORDER BY tag";
         if let Ok(res) = db.run_sql(sql) {
             let mut tag_list = Vec::new();
-            if let Some(rows) = res.get("rows").and_then(|r: &serde_json::Value| r.as_array()) {
+            if let Some(rows) = res
+                .get("rows")
+                .and_then(|r: &serde_json::Value| r.as_array())
+            {
                 for r in rows {
                     if let Some(t) = r["tag"].as_str() {
                         tag_list.push(t.to_string());
@@ -621,7 +638,11 @@ async fn api_resolve_id(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     match storage::get_entity_type(&state.data_dir, &id) {
-        Some((t, full_id)) => (StatusCode::OK, Json(serde_json::json!({ "type": t, "id": full_id }))).into_response(),
+        Some((t, full_id)) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "type": t, "id": full_id })),
+        )
+            .into_response(),
         None => (StatusCode::NOT_FOUND, "Entity not found").into_response(),
     }
 }
@@ -850,15 +871,18 @@ async fn api_graph(State(state): State<AppState>) -> impl IntoResponse {
                 if let Some(link_str) = link_val.as_str()
                     && let Some((rel, target_prefix)) = link_str.split_once(':')
                 {
-// Resolve prefix to full ID
+                    // Resolve prefix to full ID
                     let mut resolved_target = None;
                     if valid_ids.contains(target_prefix) {
                         resolved_target = Some(target_prefix.to_string());
                     } else {
                         // Find first ID that starts with target_prefix
                         use std::ops::Bound;
-                        let mut range = valid_ids.range((Bound::Included(target_prefix.to_string()), Bound::Unbounded));
-                        if let Some(found) = range.next() && found.starts_with(target_prefix) {
+                        let mut range = valid_ids
+                            .range((Bound::Included(target_prefix.to_string()), Bound::Unbounded));
+                        if let Some(found) = range.next()
+                            && found.starts_with(target_prefix)
+                        {
                             resolved_target = Some(found.clone());
                         }
                     }
