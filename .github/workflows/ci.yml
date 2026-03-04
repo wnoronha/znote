@@ -34,6 +34,8 @@ jobs:
         run: cd ui && npm run build
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - name: Install dolt
+        run: sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash'
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
